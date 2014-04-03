@@ -1,4 +1,4 @@
-prefix=/home/coroner/zwa/install/zorp-gpl-5.0
+prefix=/home/coroner/src/zorp
 exec_prefix=${prefix}
 libdir=${prefix}/lib
 includedir=${prefix}/include
@@ -8,6 +8,6 @@ datadir=${datarootdir}
 Name: ZorpLib
 Description: Zorp Core Library
 Requires: zorplibll
-Version: 3.9.8
-Libs: -lzorp -L${prefix}/lib
-Cflags: -I${prefix}/include
+Version: 5.0.0
+Libs: -lzorp -L${prefix}/lib -lpython2.7  
+Cflags: -I${prefix}/include -I/usr/include/python2.7 -I/usr/include/x86_64-linux-gnu/python2.7  

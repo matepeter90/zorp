@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Bazsi
  * Auditor:
@@ -451,7 +450,7 @@ finger_copy_response(FingerProxy *self)
         /* EOF or read error */
         break;
 
-      response = alloca(line_len + 3);
+      response = static_cast<gchar *>(alloca(line_len + 3));
       memcpy(response, line, line_len);
       strcpy(response + line_len, "\r\n");
       if (z_stream_write(self->super.endpoints[EP_CLIENT],
@@ -496,7 +495,7 @@ finger_copy_response(FingerProxy *self)
 static gboolean
 finger_query_policy(FingerProxy *self)
 {
-  char *errmsg = "Policy violation, request denied.\r\n";
+  const char *errmsg = "Policy violation, request denied.\r\n";
   gsize bytes_written;
   gint res;
 
@@ -574,7 +573,7 @@ finger_main(ZProxy *s)
   z_proxy_log(self, FINGER_DEBUG, 6, "fetching request;");
   if (!finger_fetch_request(self))
     {
-      char *errmsg = "Finger protocol or disallowed protocol element, request denied.\r\n";
+      const char *errmsg = "Finger protocol or disallowed protocol element, request denied.\r\n";
       gsize bytes_written;
 
       z_stream_write(self->super.endpoints[EP_CLIENT],
@@ -652,17 +651,23 @@ ZProxyFuncs finger_proxy_funcs =
   {
     Z_FUNCS_COUNT(ZProxy),
     NULL
-  },
-  .config = finger_config,
-  .main = finger_main,
-  NULL
+  },             /* super */
+  finger_config, /* config */
+  NULL,          /* startup */
+  finger_main,   /* main */
+  NULL,          /* shutdown */
+  NULL,          /* destroy */
+  NULL,          /* nonblocking_init */
+  NULL,          /* nonblocking_deinit */
+  NULL,          /* wakeup */
 };
 
 Z_CLASS_DEF(FingerProxy, ZProxy, finger_proxy_funcs);
 
 static ZProxyModuleFuncs finger_module_funcs =
   {
-    .create_proxy = finger_proxy_new,
+    /* .create_proxy = */ finger_proxy_new,
+    /* .module_py_init = */ NULL,
   };
 
 /*+

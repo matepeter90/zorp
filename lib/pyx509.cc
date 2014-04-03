@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Bazsi, Panther
  * Auditor:
@@ -45,7 +44,36 @@ typedef struct _ZorpCertificate
   X509 *cert;
 } ZorpCertificate;
 
-static PyTypeObject z_py_zorp_certificate_type;
+static void z_py_zorp_certificate_free(ZorpCertificate *self);
+static PyObject *z_py_zorp_certificate_getattr(PyObject *o, char *name);
+static PyTypeObject z_py_zorp_certificate_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp Certificate",
+  sizeof(ZorpCertificate),
+  0,
+  (destructor) z_py_zorp_certificate_free,
+  0,                                  /* tp_print */
+  z_py_zorp_certificate_getattr,      /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  0,                                  /* tp_as_mapping */
+  0,                                  /* tp_hash */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  0,                                  /* flags */
+  "ZorpCertificate class for Zorp",   /* docstring */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_certificate_new(X509 *cert)
@@ -120,23 +148,42 @@ z_py_zorp_certificate_free(ZorpCertificate *self)
   PyObject_Del(self);
 }
 
-static PyTypeObject z_py_zorp_certificate_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "Zorp Certificate",
-  .tp_basicsize = sizeof(ZorpCertificate),
-  .tp_dealloc = (destructor) z_py_zorp_certificate_free,
-  .tp_getattr = z_py_zorp_certificate_getattr,      /* tp_getattr */
-  .tp_doc = "ZorpCertificate class for Zorp",   /* docstring */
-};
-
 typedef struct _ZorpCRL
 {
   PyObject_HEAD
   X509_CRL *crl;
 } ZorpCRL;
 
-static PyTypeObject z_py_zorp_crl_type;
+static void z_py_zorp_crl_free(ZorpCRL *self);
+static PyObject *z_py_zorp_crl_getattr(PyObject *o, char *name);
+static PyTypeObject z_py_zorp_crl_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp CRL",
+  sizeof(ZorpCRL),
+  0,
+  (destructor) z_py_zorp_crl_free,
+  0,                                  /* tp_print */
+  z_py_zorp_crl_getattr,              /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  0,                                  /* tp_as_mapping */
+  0,                                  /* tp_hash */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  0,                                  /* flags */
+  "ZorpCRL class for Zorp",           /* docstring */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_crl_new(X509_CRL *crl)
@@ -188,23 +235,51 @@ z_py_zorp_crl_free(ZorpCRL *self)
   PyObject_Del(self);
 }
 
-static PyTypeObject z_py_zorp_crl_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "Zorp CRL",
-  .tp_basicsize = sizeof(ZorpCRL),
-  .tp_dealloc = (destructor) z_py_zorp_crl_free,
-  .tp_getattr = z_py_zorp_crl_getattr,
-  .tp_doc = "ZorpCRL class for Zorp"
-};
-
-typedef struct _ZorpCertList
+struct ZorpCertList
 {
   PyObject_HEAD
   STACK_OF(X509) *certs;
-} ZorpCertList;
+};
 
-static PyTypeObject z_py_zorp_cert_list_type;
+static Py_ssize_t z_py_zorp_cert_list_length(ZorpCertList *self);
+static PyObject *z_py_zorp_cert_list_subscript(ZorpCertList *self, PyObject *ndx);
+static gint z_py_zorp_cert_list_ass_subscript(ZorpCertList *self, PyObject *ndx, PyObject *new_);
+static PyMappingMethods z_py_zorp_cert_list_mapping =
+{
+  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_cert_list_length,
+  (binaryfunc) z_py_zorp_cert_list_subscript,
+  (objobjargproc) z_py_zorp_cert_list_ass_subscript
+};
+
+static void z_py_zorp_cert_list_free(ZorpCertList *self);
+static PyTypeObject z_py_zorp_cert_list_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp Certificate List",
+  sizeof(ZorpCertList),
+  0,
+  (destructor) z_py_zorp_cert_list_free,
+  0,                                  /* tp_print */
+  0,                                  /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  &z_py_zorp_cert_list_mapping,        /* tp_as_mapping */
+  0,                                  /* tp_hash */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  0,                                  /* flags */
+  "ZorpCertList class for Zorp",   /* docstring */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_cert_list_new(STACK_OF(X509) *certs)
@@ -272,17 +347,17 @@ z_py_zorp_cert_list_subscript(ZorpCertList *self, PyObject *ndx)
 }
 
 static gint
-z_py_zorp_cert_list_ass_subscript(ZorpCertList *self, PyObject *ndx, PyObject *new)
+z_py_zorp_cert_list_ass_subscript(ZorpCertList *self, PyObject *ndx, PyObject *new_)
 {
   X509 *cert = NULL;
   int i;
 
-  if (new)
+  if (new_)
     {
-      if (PyString_Check(new))
+      if (PyString_Check(new_))
         {
           /* new-ban pem, berakni az i. helyere */
-          cert = PROXY_SSL_EXTRACT_PEM(PyString_AsString(new), PyString_Size(new), PEM_read_bio_X509);
+          cert = (X509 *)PROXY_SSL_EXTRACT_PEM(PyString_AsString(new_), PyString_Size(new_), PEM_read_bio_X509);
         }
 
       if (!cert)
@@ -314,30 +389,50 @@ z_py_zorp_cert_list_ass_subscript(ZorpCertList *self, PyObject *ndx, PyObject *n
   return 0;
 }
 
-static PyMappingMethods z_py_zorp_cert_list_mapping =
-{
-  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_cert_list_length,
-  (binaryfunc) z_py_zorp_cert_list_subscript,
-  (objobjargproc) z_py_zorp_cert_list_ass_subscript
-};
-
-static PyTypeObject z_py_zorp_cert_list_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "Zorp Certificate List",
-  .tp_basicsize = sizeof(ZorpCertList),
-  .tp_dealloc = (destructor) z_py_zorp_cert_list_free,
-  .tp_as_mapping = &z_py_zorp_cert_list_mapping,        /* tp_as_mapping */
-  .tp_doc = "ZorpCertList class for Zorp",   /* docstring */
-};
-
-typedef struct _ZorpCertNameList
+struct ZorpCertNameList
 {
   PyObject_HEAD
   STACK_OF(X509_NAME) *cert_names;
-} ZorpCertNameList;
+};
 
-static PyTypeObject z_py_zorp_cert_name_list_type;
+static Py_ssize_t z_py_zorp_cert_name_list_length(ZorpCertNameList *self);
+static PyObject *z_py_zorp_cert_name_list_subscript(ZorpCertNameList *self, PyObject *ndx);
+static PyMappingMethods z_py_zorp_cert_name_list_mapping =
+{
+  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_cert_name_list_length,
+  (binaryfunc) z_py_zorp_cert_name_list_subscript,
+  (objobjargproc) NULL
+};
+
+static void z_py_zorp_cert_name_list_free(ZorpCertNameList *self);
+static PyTypeObject z_py_zorp_cert_name_list_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp Certificate Name List",
+  sizeof(ZorpCertNameList),
+  0,
+  (destructor) z_py_zorp_cert_name_list_free,
+  0,                                  /* tp_print */
+  0,                                  /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  &z_py_zorp_cert_name_list_mapping,        /* tp_as_mapping */
+  0,                                  /* tp_hash */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  0,                                  /* flags */
+  "ZorpCertNameList class for Zorp",   /* docstring */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_cert_name_list_new(STACK_OF(X509_NAME) *cert_names)
@@ -408,30 +503,51 @@ z_py_zorp_cert_name_list_subscript(ZorpCertNameList *self, PyObject *ndx)
   return PyString_FromString(buf);
 }
 
-static PyMappingMethods z_py_zorp_cert_name_list_mapping =
-{
-  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_cert_name_list_length,
-  (binaryfunc) z_py_zorp_cert_name_list_subscript,
-  (objobjargproc) NULL
-};
-
-static PyTypeObject z_py_zorp_cert_name_list_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "Zorp Certificate Name List",
-  .tp_basicsize = sizeof(ZorpCertNameList),
-  .tp_dealloc = (destructor) z_py_zorp_cert_name_list_free,
-  .tp_as_mapping = &z_py_zorp_cert_name_list_mapping,
-  .tp_doc = "ZorpCertNameList class for Zorp"
-};
-
-typedef struct _ZorpCRLList
+struct ZorpCRLList
 {
   PyObject_HEAD
   STACK_OF(X509_CRL) *crls;
-} ZorpCRLList;
+};
 
-static PyTypeObject z_py_zorp_crl_list_type;
+static Py_ssize_t z_py_zorp_crl_list_length(ZorpCRLList *self);
+static PyObject *z_py_zorp_crl_list_subscript(ZorpCRLList *self, PyObject *ndx);
+static gint z_py_zorp_crl_list_ass_subscript(ZorpCRLList *self, PyObject *ndx, PyObject *new_);
+static PyMappingMethods z_py_zorp_crl_list_mapping =
+{
+  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_crl_list_length,
+  (binaryfunc) z_py_zorp_crl_list_subscript,
+  (objobjargproc) z_py_zorp_crl_list_ass_subscript
+};
+
+static void z_py_zorp_crl_list_free(ZorpCRLList *self);
+static PyTypeObject z_py_zorp_crl_list_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp CRL List",
+  sizeof(ZorpCRLList),
+  0,
+  (destructor) z_py_zorp_crl_list_free,
+  0,                                  /* tp_print */
+  0,                                  /* tp_getattr */
+  0,                                  /* tp_setattr */
+  0,                                  /* tp_compare */
+  0,                                  /* tp_repr */
+  0,                                  /* tp_as_number */
+  0,                                  /* tp_as_sequence */
+  &z_py_zorp_crl_list_mapping,        /* tp_as_mapping */
+  0,                                  /* tp_hash */
+  0,                                  /* tp_call */
+  0,                                  /* tp_str */
+  0,                                  /* tp_getattro */
+  0,                                  /* tp_setattro */
+  0,                                  /* tp_as_buffer */
+  0,                                  /* flags */
+  "ZorpCRLList class for Zorp",   /* docstring */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_crl_list_new(STACK_OF(X509_CRL) *crls)
@@ -499,17 +615,17 @@ z_py_zorp_crl_list_subscript(ZorpCRLList *self, PyObject *ndx)
 }
 
 static gint
-z_py_zorp_crl_list_ass_subscript(ZorpCRLList *self, PyObject *ndx, PyObject *new)
+z_py_zorp_crl_list_ass_subscript(ZorpCRLList *self, PyObject *ndx, PyObject *new_)
 {
   X509_CRL *crl = NULL;
   int i;
 
-  if (new)
+  if (new_)
     {
-      if (PyString_Check(new))
+      if (PyString_Check(new_))
         {
           /* new-ban pem, berakni az i. helyere */
-          crl = PROXY_SSL_EXTRACT_PEM(PyString_AsString(new), PyString_Size(new), PEM_read_bio_X509_CRL);
+          crl = (X509_CRL *)PROXY_SSL_EXTRACT_PEM(PyString_AsString(new_), PyString_Size(new_), PEM_read_bio_X509_CRL);
         }
 
       if (!crl)
@@ -529,35 +645,10 @@ z_py_zorp_crl_list_ass_subscript(ZorpCRLList *self, PyObject *ndx, PyObject *new
 
   if (crl)
     {
-#if 0
-      if (X509_CRL_find_by_subject(self->crls, X509_CRL_get_issuer(crl)))
-        {
-          X509_CRL_free(cert);
-          PyErr_SetString(PyExc_ValueError, "Trying to add a duplicate certificate.");
-          return -1;
-        }
-#endif
       sk_X509_CRL_push(self->crls, crl);
     }
   return 0;
 }
-
-static PyMappingMethods z_py_zorp_crl_list_mapping =
-{
-  (Z_PYMAPPING_LENFUNC_TYPE) z_py_zorp_crl_list_length,
-  (binaryfunc) z_py_zorp_crl_list_subscript,
-  (objobjargproc) z_py_zorp_crl_list_ass_subscript
-};
-
-static PyTypeObject z_py_zorp_crl_list_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "Zorp CRL List",
-  .tp_basicsize = sizeof(ZorpCRLList),
-  .tp_dealloc = (destructor) z_py_zorp_crl_list_free,
-  .tp_as_mapping = &z_py_zorp_crl_list_mapping,
-  .tp_doc = "ZorpCRLList class for Zorp"
-};
 
 ZPolicyObj *
 z_py_ssl_certificate_get(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value)
@@ -568,7 +659,7 @@ z_py_ssl_certificate_get(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, 
 }
 
 int
-z_py_ssl_certificate_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new)
+z_py_ssl_certificate_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new_)
 {
   X509 **cert = (X509 **) value;
 
@@ -577,9 +668,9 @@ z_py_ssl_certificate_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, 
       X509_free(*cert);
       *cert = NULL;
     }
-  if (PyString_Check(new))
+  if (PyString_Check(new_))
     {
-      (*cert) = PROXY_SSL_EXTRACT_PEM(PyString_AsString(new), PyString_Size(new), PEM_read_bio_X509);
+      (*cert) = (X509 *)PROXY_SSL_EXTRACT_PEM(PyString_AsString(new_), PyString_Size(new_), PEM_read_bio_X509);
     }
   if (!(*cert))
     {
@@ -604,7 +695,7 @@ z_py_ssl_privkey_get(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpoi
 }
 
 int
-z_py_ssl_privkey_set(ZProxy *self, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new)
+z_py_ssl_privkey_set(ZProxy *self, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new_)
 {
   EVP_PKEY **pkey = (EVP_PKEY **) value;
   GString       *passphrase;
@@ -615,7 +706,7 @@ z_py_ssl_privkey_set(ZProxy *self, gchar *name G_GNUC_UNUSED, gpointer value, ZP
       EVP_PKEY_free(*pkey);
       *pkey = NULL;
     }
-  if (PyString_Check(new))
+  if (PyString_Check(new_))
     {
       if (pkey == &self->ssl_opts.local_privkey[EP_CLIENT])
         passphrase = self->ssl_opts.local_privkey_passphrase[EP_CLIENT];
@@ -626,7 +717,7 @@ z_py_ssl_privkey_set(ZProxy *self, gchar *name G_GNUC_UNUSED, gpointer value, ZP
 
       /* (*pkey) = PROXY_SSL_EXTRACT_PEM(PyString_AsString(new), PyString_Size(new), PEM_read_bio_PrivateKey); */
       {
-        BIO *bio = BIO_new_mem_buf(PyString_AsString(new), PyString_Size(new));
+        BIO *bio = BIO_new_mem_buf(PyString_AsString(new_), PyString_Size(new_));
         (*pkey) = PEM_read_bio_PrivateKey(bio, NULL, NULL, passphrase ? passphrase->str : NULL);
         BIO_free(bio);
       }

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor : kisza
@@ -69,7 +68,7 @@ static PyObject *
 z_py_log(PyObject *self G_GNUC_UNUSED, PyObject *args)
 {
   unsigned long verbosity;
-  char *class, *msg;
+  char *class_, *msg;
   PyObject *py_session_id, *log_fmt, *log_args, *log_msg = NULL;
   gchar *session_id;
 
@@ -80,17 +79,17 @@ z_py_log(PyObject *self G_GNUC_UNUSED, PyObject *args)
     }
   if (PyTuple_Size(args) == 3)
     {
-      if (!PyArg_ParseTuple(args, "sis", &class, &verbosity, &msg))
+      if (!PyArg_ParseTuple(args, "sis", &class_, &verbosity, &msg))
         return NULL;
       session_id = NULL;
     }
   else
     {
       log_args = NULL;
-      if (!PyArg_ParseTuple(args, "OsiO|O", &py_session_id, &class, &verbosity, &log_fmt, &log_args))
+      if (!PyArg_ParseTuple(args, "OsiO|O", &py_session_id, &class_, &verbosity, &log_fmt, &log_args))
         return NULL;
 
-      if (!z_log_enabled(class, verbosity))
+      if (!z_log_enabled(class_, verbosity))
         {
           return z_policy_none_ref();
         }
@@ -132,7 +131,7 @@ z_py_log(PyObject *self G_GNUC_UNUSED, PyObject *args)
     }
 
   /*NOLOG*/
-  z_log(session_id, class, verbosity, "%s", msg);
+  z_log(session_id, class_, verbosity, "%s", msg);
   Py_XDECREF(log_msg);
 
   return z_policy_none_ref();
@@ -199,7 +198,7 @@ z_py_get_instance_id(PyObject *self G_GNUC_UNUSED, PyObject *args)
   if (instance_ids == NULL)
     instance_ids = g_hash_table_new(g_str_hash, g_str_equal);
 
-  value = g_hash_table_lookup(instance_ids, service_name);
+  value = static_cast<gint *>(g_hash_table_lookup(instance_ids, service_name));
 
   if (!value)
     {

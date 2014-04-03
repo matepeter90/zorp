@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor : kisza
@@ -69,14 +68,30 @@ static PyMethodDef py_zorp_stream_methods[] =
 
 PyTypeObject z_policy_stream_type =
 {
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "ZPolicyStream",
-  .tp_basicsize = sizeof(ZPolicyStream),
-  .tp_dealloc = (destructor) z_policy_stream_destroy,
-  .tp_getattr = (getattrfunc) z_policy_stream_getattr,
-  .tp_setattr = (setattrfunc) z_policy_stream_setattr,
-  .tp_repr = (reprfunc) z_policy_stream_repr,
-  .tp_doc = "ZPolicyStream class for Zorp",
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "ZPolicyStream",                       /* tp_name */
+  sizeof(ZPolicyStream),                 /* tp_basicsize */
+  0,                                     /* tp_itemsize */
+  (destructor) z_policy_stream_destroy,  /* tp_dealloc */
+  0,                                     /* tp_print */
+  (getattrfunc) z_policy_stream_getattr, /* tp_getattr */
+  (setattrfunc) z_policy_stream_setattr, /* tp_setattr */
+  0,                                     /* tp_compare */
+  (reprfunc) z_policy_stream_repr,       /* tp_repr */
+  0,                                     /* tp_as_number */
+  0,                                     /* tp_as_sequence */
+  0,                                     /* tp_as_mapping */
+  0,                                     /* tp_hash */
+  0,                                     /* tp_call */
+  0,                                     /* tp_str */
+  0,                                     /* Space for future expansion */
+  0,
+  0,
+  0,
+  "ZPolicyStream class for Zorp",        /* documentation string */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
 };
 
 /**
@@ -201,6 +216,10 @@ z_policy_stream_getattr(PyObject *o, char *name)
     {
       return PyLong_FromLong(z_stream_get_keepalive(self->stream));
     }
+  else if (strcmp(name, "nonblocking") == 0)
+    {
+      return PyLong_FromLong(z_stream_get_nonblock(self->stream));
+    }
 
   return Py_FindMethod(py_zorp_stream_methods, o, name);
 }
@@ -228,7 +247,7 @@ z_policy_stream_setattr(PyObject *o, char *name,
       if (!PyArg_Parse(value, "s", &str))
 	{
 	  PyErr_SetString(PyExc_TypeError, "Stream name is not a string");
-	  return 1;
+	  return -1;
 	}
       else
 	{
@@ -242,7 +261,7 @@ z_policy_stream_setattr(PyObject *o, char *name,
       if (!PyArg_Parse(value, "i", &cval))
 	{
 	  PyErr_SetString(PyExc_TypeError, "nul_nonfatal is boolean");
-	  return 1;
+	  return -1;
 	}
       z_stream_ctrl(self->stream, ZST_LINE_SET_NUL_NONFATAL,  &cval, sizeof(int));
       return 0;
@@ -253,7 +272,7 @@ z_policy_stream_setattr(PyObject *o, char *name,
       if (!PyArg_Parse(value, "i", &cval))
 	{
 	  PyErr_SetString(PyExc_TypeError, "split is boolean");
-	  return 1;
+	  return -1;
 	}
       z_stream_ctrl(self->stream, ZST_LINE_SET_SPLIT,  &cval, sizeof(int));
       return 0;
@@ -264,7 +283,7 @@ z_policy_stream_setattr(PyObject *o, char *name,
       if (!PyArg_Parse(value, "i", &keepalive))
         {
           PyErr_SetString(PyExc_TypeError, "Stream keepalive value is not an integer");
-          return 1;
+          return -1;
         }
       else
         {
@@ -272,9 +291,23 @@ z_policy_stream_setattr(PyObject *o, char *name,
           return 0;
         }
     }
+  else if (strcmp(name, "nonblocking") == 0)
+    {
+      gint nonblocking;
+      if (!PyArg_Parse(value, "i", &nonblocking))
+	{
+	  PyErr_SetString(PyExc_TypeError, "Stream nonblocking value should be 0 or 1");
+	  return 1;
+	}
+      else
+	{
+	  z_stream_set_nonblock(self->stream, (nonblocking != 0) ? TRUE : FALSE);
+	  return 0;
+	}
+    }
 
   PyErr_SetString(PyExc_AttributeError, "No such attribute");
-  return 1;
+  return -1;
 }
 
 /**

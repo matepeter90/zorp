@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -63,7 +62,7 @@ static struct _Pop3InternalCommands known_commands[] = {
 };
 
 GIOStatus
-pop3_write_client(Pop3Proxy *self, char *msg)
+pop3_write_client(Pop3Proxy *self, const char *msg)
 {
   GIOStatus rc;
   gsize bytes_written;
@@ -84,8 +83,8 @@ pop3_write_server(Pop3Proxy *self, char *msg)
   z_proxy_return(self, rc);
 }
 
-gchar *
-pop3_get_from(gchar *header G_GNUC_UNUSED, gpointer user_data)
+static gchar *
+pop3_get_from(const gchar *header G_GNUC_UNUSED, gpointer user_data)
 {
   Pop3Proxy *self = Z_CAST(user_data, Pop3Proxy);
   gchar *res;
@@ -95,8 +94,8 @@ pop3_get_from(gchar *header G_GNUC_UNUSED, gpointer user_data)
   z_proxy_return(self, res);
 }
 
-gchar *
-pop3_get_to(gchar *header G_GNUC_UNUSED, gpointer user_data)
+static gchar *
+pop3_get_to(const gchar *header G_GNUC_UNUSED, gpointer user_data)
 {
   Pop3Proxy *self = Z_CAST(user_data, Pop3Proxy);
   gchar *res;
@@ -106,8 +105,8 @@ pop3_get_to(gchar *header G_GNUC_UNUSED, gpointer user_data)
   z_proxy_return(self, res);
 }
 
-gchar *
-pop3_get_subject(gchar *header G_GNUC_UNUSED, gpointer user_data)
+static gchar *
+pop3_get_subject(const gchar *header G_GNUC_UNUSED, gpointer user_data)
 {
   Pop3Proxy *self = Z_CAST(user_data, Pop3Proxy);
   gchar *res;
@@ -426,7 +425,7 @@ pop3_command_parse(Pop3Proxy *self)
       g_string_assign(self->command_param, "");
     }
 
-  self->command_desc = g_hash_table_lookup(self->pop3_commands, self->command->str);
+  self->command_desc = static_cast<Pop3InternalCommands *>(g_hash_table_lookup(self->pop3_commands, self->command->str));
   if (!self->command_desc && !self->permit_unknown_command && !pop3_policy_command_hash_search(self, self->command->str))
     {
       /*LOG
@@ -720,8 +719,8 @@ pop3_config_init(Pop3Proxy *self)
   z_proxy_enter(self);
 /* Load the command hash. */
   for (i = 0; known_commands[i].name != NULL; i++)
-    g_hash_table_insert(self->pop3_commands, known_commands[i].name,
-                        &known_commands[i]);
+    g_hash_table_insert(self->pop3_commands, const_cast<gchar *>(known_commands[i].name),
+                        const_cast<Pop3InternalCommands *>(&known_commands[i]));
 
   if (self->max_request_length + 1 > self->buffer_length)
     self->buffer_length = self->max_request_length + 1;
@@ -824,9 +823,14 @@ ZProxyFuncs pop3_proxy_funcs =
     Z_FUNCS_COUNT(ZProxy),
     pop3_proxy_free,
   },
-  .config = pop3_config,
-  .main = pop3_main,
-  NULL
+  /* .config = */ pop3_config,
+  /* .startup = */ NULL,
+  /* .main = */ pop3_main,
+  /* .shutdown = */ NULL,
+  /* .destroy = */ NULL,
+  /* .nonblocking_init = */ NULL,
+  /* .nonblocking_deinit = */ NULL,
+  /* .wakeup = */ NULL,
 };
 
 Z_CLASS_DEF(Pop3Proxy, ZProxy, pop3_proxy_funcs);
@@ -855,7 +859,8 @@ pop3_proxy_free(ZObject *s)
 
 static ZProxyModuleFuncs pop3_module_funcs =
   {
-    .create_proxy = pop3_proxy_new,
+    /* .create_proxy = */ pop3_proxy_new,
+    /* .module_py_init = */ NULL
   };
 
 /*+

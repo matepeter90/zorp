@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -39,10 +38,11 @@
 #include <zorp/pysockaddr.h>
 
 /**
- * z_proxy_stack_prepare_streams:
- * @self: ZProxy instance
- * @downpair:
- * @uppair:
+ * Create fd pairs for used for proxy stacking.
+ *
+ * @param self ZProxy instance
+ * @param[out] downpair array to store the downstream file descriptor pair in
+ * @param[out] uppair array to store the upstream file descriptor pair in
  *
  **/
 static gboolean
@@ -77,86 +77,223 @@ z_proxy_stack_prepare_streams(ZProxy *self, gint *downpair, gint *uppair)
 }
 
 /**
- * z_proxy_stack_proxy:
- * @self: proxy instance
- * @proxy_class: a Python class to be instantiated as the child proxy
+ * Return a python wrapper of the stack info dict.
  *
- * This function is called to start a child proxy.
+ * \param stack_info a policy dict containing info provided by parent.
+ * \return a Python object wrapping a dict or None if \p stack_info is NULL.
+ */
+static ZPolicyObj *
+wrap_stack_info(ZPolicyDict *stack_info)
+{
+  if (stack_info)
+    return z_policy_struct_new(stack_info, Z_PST_SHARED);
+  else
+    return z_policy_none_ref();
+}
+
+
+/**
+ * Call Python policy method starting a child proxy.
+ *
+ * @param self proxy instance
+ * @param proxy_class a Python class to be instantiated as the child proxy
+ * @param client_stream a ZStream instance to be used as the client-side stream of the proxy
+ * @param server_stream a ZStream instance to be used as the server-side stream of the proxy
+ * @param stacked ZStackedProxy instance to store results in
+ * @param stack_info policy dict used to pass info to the stacked proxy
+ *
+ * @return a new proxy instance that has been stacked
+ *
  **/
-gboolean
+static ZProxy *
+z_proxy_stack_call_policy(ZProxy *self, ZPolicyObj *proxy_class, ZStream *client_stream, ZStream *server_stream, ZPolicyDict *stack_info)
+{
+  if (proxy_class == z_policy_none)
+      return NULL;
+
+  ZPolicyObj *stack_info_obj = wrap_stack_info(stack_info);
+  ZPolicyObj *client_stream_obj = z_policy_stream_new(client_stream);
+  ZPolicyObj *server_stream_obj = z_policy_stream_new(server_stream);
+  ZPolicyObj *stack_proxy_args = z_policy_var_build("(OOOO)", client_stream_obj, server_stream_obj, proxy_class, stack_info_obj);
+  ZPolicyObj *proxy_obj = z_policy_call(self->handler, "stackProxy", stack_proxy_args, NULL, self->session_id);
+  z_policy_var_unref(server_stream_obj);
+  z_policy_var_unref(client_stream_obj);
+  z_policy_var_unref(stack_info_obj);
+
+  ZProxy *stacked_proxy = NULL;
+  if (proxy_obj == NULL || proxy_obj == z_policy_none || !z_policy_proxy_check(proxy_obj))
+    z_proxy_log(self, CORE_ERROR, 3, "Error stacking subproxy;");
+  else
+    stacked_proxy = z_policy_proxy_get_proxy(proxy_obj);
+
+  if (proxy_obj != NULL)
+    z_policy_var_unref(proxy_obj);
+
+  return stacked_proxy;
+}
+
+/**
+ * Instantiate and start a stacked proxy of a given class.
+ *
+ * \param self parent proxy
+ * \param proxy_class proxy class to be instantiated
+ * \param[out] stacked pointer to the newly created stacked proxy object
+ * \param stack_info optinal information passed to the child proxy
+ * \return TRUE if stacking succeeded
+ *
+ */
+static gboolean
 z_proxy_stack_proxy(ZProxy *self, ZPolicyObj *proxy_class, ZStackedProxy **stacked, ZPolicyDict *stack_info)
 {
-  int downpair[2], uppair[2];
-  ZPolicyObj *res, *client_stream, *server_stream, *stack_info_obj;
-  ZStream *tmpstream;
-  ZStream *client_upstream, *server_upstream;
+  int clientpair[2], serverpair[2];
+  gboolean res = FALSE;
 
-  z_proxy_enter(self);
-  if (proxy_class == z_policy_none)
-    {
-      z_policy_var_unref(proxy_class);
-      z_proxy_leave(self);
+  /* construct down and up stream pairs */
+  if (!z_proxy_stack_prepare_streams(self, clientpair, serverpair))
       return FALSE;
-    }
 
-  if (!z_proxy_stack_prepare_streams(self, downpair, uppair))
-    {
-      z_policy_var_unref(proxy_class);
-      z_proxy_leave(self);
-      return FALSE;
-    }
+  ZStream *client_stream = z_stream_fd_new(clientpair[1], "");
+  ZStream *server_stream = z_stream_fd_new(serverpair[1], "");
 
   /*LOG
     This message reports that Zorp is about to stack a proxy class
     with the given fds as communication channels.
    */
-  z_proxy_log(self, CORE_DEBUG, 6, "Stacking subproxy; client='%d:%d', server='%d:%d'", downpair[0], downpair[1], uppair[0], uppair[1]);
+  z_proxy_log(self, CORE_DEBUG, 6, "Stacking subproxy; client='%d:%d', server='%d:%d'",
+              clientpair[0], clientpair[1], serverpair[0], serverpair[1]);
 
-  tmpstream = z_stream_fd_new(downpair[1], "");
-  client_stream = z_policy_stream_new(tmpstream);
-  z_stream_unref(tmpstream);
-
-  tmpstream = z_stream_fd_new(uppair[1], "");
-  server_stream = z_policy_stream_new(tmpstream);
-  z_stream_unref(tmpstream);
-
-  if (stack_info)
+  ZProxy *stacked_proxy = z_proxy_stack_call_policy(self, proxy_class, client_stream, server_stream, stack_info);
+  if (stacked_proxy != NULL)
     {
-      stack_info_obj = z_policy_struct_new(stack_info, Z_PST_SHARED);
+      ZStream *client_upstream = z_stream_fd_new(clientpair[0], "");
+      ZStream *server_upstream = z_stream_fd_new(serverpair[0], "");
+
+      *stacked = z_stacked_proxy_new(client_upstream, server_upstream, NULL, self, stacked_proxy, 0);
+
+      res = TRUE;
     }
   else
     {
-      stack_info_obj = z_policy_none_ref();
+      /* close fds */
+      close(clientpair[0]);
+      close(serverpair[0]);
+      z_stream_close(client_stream, NULL);
+      z_stream_close(server_stream, NULL);
+
+      res = FALSE;
     }
 
-  res = z_policy_call(self->handler, "stackProxy", z_policy_var_build("(OOOO)", client_stream, server_stream, proxy_class, stack_info_obj),
-                        NULL, self->session_id);
+  z_stream_unref(client_stream);
+  z_stream_unref(server_stream);
 
-  z_policy_var_unref(client_stream);
-  z_policy_var_unref(server_stream);
-  z_policy_var_unref(stack_info_obj);
-
-  if (!res || res == z_policy_none || !z_policy_proxy_check(res))
-    {
-      z_proxy_log(self, CORE_ERROR, 3, "Error stacking subproxy;");
-      close(downpair[0]);
-      close(downpair[1]);
-      close(uppair[0]);
-      close(uppair[1]);
-      z_policy_var_unref(res);
-      z_proxy_leave(self);
-      return FALSE;
-    }
-
-  client_upstream = z_stream_fd_new(downpair[0], "");
-  server_upstream = z_stream_fd_new(uppair[0], "");
-  *stacked = z_stacked_proxy_new(client_upstream, server_upstream, NULL, self, z_policy_proxy_get_proxy(res), 0);
-  z_policy_var_unref(res);
-
-  z_proxy_leave(self);
-  return TRUE;
+  return res;
 }
 
+/**
+ * Call Python method instantiating a given proxy and starting it in a specific session.
+ *
+ * \param self parent proxy
+ * \param proxy_class proxy class to be instantiated
+ * \param session pre-constructed session object to start the proxy in
+ * \param stack_info optional information passed to the stacked proxy
+ *
+ * \return proxy structure of the new proxy instance
+ */
+static ZProxy *
+z_proxy_stack_in_session_call_policy(ZProxy *self, ZPolicyObj *proxy_class, ZPolicyObj *session,
+                                     ZPolicyDict *stack_info)
+{
+  if (proxy_class == z_policy_none)
+    return NULL;
+
+  ZPolicyObj *stack_info_obj = wrap_stack_info(stack_info);
+  ZPolicyObj *stack_proxy_args = z_policy_var_build("(OOO)", proxy_class, session, stack_info_obj);
+  ZPolicyObj *proxy_obj = z_policy_call(self->handler, "stackProxyInSession", stack_proxy_args, NULL, self->session_id);
+  z_policy_var_unref(stack_info_obj);
+
+  ZProxy *stacked_proxy = NULL;
+  if (proxy_obj == NULL || proxy_obj == z_policy_none || !z_policy_proxy_check(proxy_obj))
+    z_proxy_log(self, CORE_ERROR, 3, "Error stacking subproxy, the proxy object returned by stackProxyInSession() is invalid;");
+  else
+    stacked_proxy = z_policy_proxy_get_proxy(proxy_obj);
+
+  if (proxy_obj != NULL)
+    z_policy_var_unref(proxy_obj);
+
+  return stacked_proxy;
+}
+
+/**
+ * \brief z_proxy_stack_proxy_in_session
+ *
+ * \param self parent proxy
+ * \param proxy_class proxy class to be instantiated
+ * \param session Session object to start the proxy in
+ * \param client_downstream stream to be used by the parent proxy to read the client endpoint of the child proxy
+ * \param server_downstream stream to be used by the parent proxy to read the server endpoint of the child proxy
+ * \param[out] stacked on success, this is updated with the newly constructed stacked proxy object
+ * \param stack_info optional dictionary containing information that is passed to the child proxy
+ *
+ * \return TRUE on success
+ *
+ * This function is intended to be used when full control is required by the
+ * proxy over the session the child proxy is started in. For example, it is
+ * used by the TSG proxy to stack child proxies for the channels: this way the
+ * TSG proxy has full control over the session IDs and streams of the child
+ * proxy (and can omit the server-side stream completely, for example).
+ */
+static gboolean
+z_proxy_stack_proxy_in_session(ZProxy *self, ZPolicyObj *proxy_class, ZPolicyObj *session,
+                               ZStream *client_downstream, ZStream *server_downstream,
+                               ZStackedProxy **stacked, ZPolicyDict *stack_info)
+{
+  gboolean res = FALSE;
+
+  z_proxy_enter(self);
+
+  /*LOG
+    This message reports that Zorp is about to stack a proxy class
+    with the given fds as communication channels.
+   */
+  z_proxy_log(self, CORE_DEBUG, 6, "Stacking subproxy; client_upstream='%d', server_upstream='%d'",
+              z_stream_get_fd(client_downstream),
+              (server_downstream != NULL) ? z_stream_get_fd(server_downstream) : 0);
+
+  ZProxy *stacked_proxy = z_proxy_stack_in_session_call_policy(self, proxy_class, session, stack_info);
+  if (!stacked_proxy)
+    {
+      z_stream_close(client_downstream, NULL);
+      z_stream_unref(client_downstream);
+
+      if (server_downstream != NULL)
+        {
+          z_stream_close(server_downstream, NULL);
+          z_stream_unref(server_downstream);
+        }
+
+      res = FALSE;
+    }
+  else
+    {
+      *stacked = z_stacked_proxy_new(client_downstream, server_downstream, NULL, self, stacked_proxy, 0);
+
+      res = TRUE;
+    }
+
+  z_proxy_return(self, res);
+}
+
+/**
+ * Stack client and server streams given as file descriptors.
+ *
+ * \param self          parent proxy
+ * \param client_fd     file descriptor used by the parent proxy to read the client side of the stacked object
+ * \param server_fd     file descriptor for the server stream of the stacked object
+ * \param control_fd    file descriptor to be used for the control protocol
+ * \param[out] stacked  pointer to the new stacked proxy created in case of success
+ * \param flags         FIXME
+ * \return              TRUE on success, FALSE otherwise
+ */
 static gboolean
 z_proxy_stack_fds(ZProxy *self, gint client_fd, gint server_fd, gint control_fd, ZStackedProxy **stacked, guint32 flags)
 {
@@ -175,10 +312,11 @@ z_proxy_stack_fds(ZProxy *self, gint client_fd, gint server_fd, gint control_fd,
 }
 
 /**
- * z_proxy_control_stream_read:
- * @stream: stream to read from
- * @cond: I/O condition which triggered this call
- * @user_data: ZProxy instance as a generic pointer
+ * Read callback for the stacked program control stream.
+ *
+ * @param stream stream to read from
+ * @param cond I/O condition which triggered this call
+ * @param user_data ZProxy instance as a generic pointer
  *
  * This function is registered as the read callback for control channels
  * of stacked programs.
@@ -198,7 +336,7 @@ z_proxy_control_stream_read(ZStream *stream, GIOCondition cond G_GNUC_UNUSED, gp
   gboolean result = TRUE;
 
   z_enter();
-  g_static_mutex_lock(&stacked->destroy_lock);
+  g_mutex_lock(&stacked->destroy_lock);
   if (stacked->destroyed)
     {
       /* NOTE: this stacked proxy has already been destroyed, but a callback
@@ -301,18 +439,18 @@ z_proxy_control_stream_read(ZStream *stream, GIOCondition cond G_GNUC_UNUSED, gp
     z_cp_command_free(response);
 
  exit_unlock:
-  g_static_mutex_unlock(&stacked->destroy_lock);
+  g_mutex_unlock(&stacked->destroy_lock);
   z_return(result);
 }
 
 
 
 /**
- * z_proxy_stack_program:
- * @self: proxy instance
- * @program: path to program to execute
+ * Start a program as a filtering child proxy.
  *
- * This function is called to start a program as a filtering child proxy.
+ * @param self proxy instance
+ * @param program path to program to execute
+ *
  **/
 static gboolean
 z_proxy_stack_program(ZProxy *self, const gchar *program, ZStackedProxy **stacked)
@@ -398,6 +536,15 @@ z_proxy_stack_program(ZProxy *self, const gchar *program, ZStackedProxy **stacke
 }
 
 
+/**
+ * Parse a (how, what) Python tuple and call the appropriate stacking method.
+ *
+ * @param self proxy instance
+ * @param tuple Python tuple containing the (how, what) pair
+ * @param stacked ZStackedProxy structure to store results in
+ * @param stack_info_dict dictionary containing info passed to the stacked object
+ *
+ **/
 static gboolean
 z_proxy_stack_tuple(ZProxy *self, ZPolicyObj *tuple, ZStackedProxy **stacked, ZPolicyDict *stack_info_dict)
 {
@@ -418,6 +565,28 @@ z_proxy_stack_tuple(ZProxy *self, ZPolicyObj *tuple, ZStackedProxy **stacked, ZP
 
       success = z_proxy_stack_proxy(self, arg, stacked, stack_info_dict);
       break;
+
+    case Z_STACK_PROXY_IN_SESSION:
+      {
+        /* input is expected to be (Z_STACK_IN_SESSION, ProxyClass, session, client_upstream, server_upstream) */
+        if (z_policy_seq_length(tuple) != 5)
+          goto invalid_tuple;
+
+        ZPolicyObj *session = z_policy_seq_getitem(tuple, 2);
+
+        ZPolicyObj *client_upstream_obj = z_policy_seq_getitem(tuple, 3);
+        ZStream *client_upstream = client_upstream_obj != z_policy_none ? z_policy_stream_get_stream(client_upstream_obj) : NULL;
+        z_policy_var_unref(client_upstream_obj);
+
+        ZPolicyObj *server_upstream_obj = z_policy_seq_getitem(tuple, 4);
+        ZStream *server_upstream = server_upstream_obj != z_policy_none ? z_policy_stream_get_stream(server_upstream_obj) : NULL;
+        z_policy_var_unref(server_upstream_obj);
+
+        success = z_proxy_stack_proxy_in_session(self, arg, session, client_upstream, server_upstream, stacked, stack_info_dict);
+        z_policy_var_unref(session);
+      }
+      break;
+
     case Z_STACK_PROGRAM:
       if (!z_policy_str_check(arg))
         goto invalid_tuple;
@@ -441,14 +610,15 @@ z_proxy_stack_tuple(ZProxy *self, ZPolicyObj *tuple, ZStackedProxy **stacked, ZP
 }
 
 /**
- * z_proxy_stack_object:
- * @self: ZProxy instance
- * @stack_obj: Python object to be stacked
+ * Choose the appropriate stacking method and stack the object.
  *
- * This function is a more general interface than
- * z_proxy_stack_proxy/z_proxy_stack_object it first decides how the
- * specified Python object needs to be stacked, performs stacking and
- * returns the stacked proxy.
+ * @param self ZProxy instance
+ * @param stack_obj Python object to be stacked
+ *
+ * This function is a more general interface than z_proxy_stack_proxy
+ * or z_proxy_stack_tuple. It first decides how the specified Python
+ * object needs to be stacked, performs stacking and returns the
+ * stacked proxy.
  **/
 gboolean
 z_proxy_stack_object(ZProxy *self, ZPolicyObj *stack_obj, ZStackedProxy **stacked, ZPolicyDict *stack_info)
@@ -477,18 +647,19 @@ z_stacked_proxy_unref(ZStackedProxy *self)
 {
   if (self && z_refcount_dec(&self->ref_cnt))
     {
-      g_static_mutex_free(&self->destroy_lock);
+      g_mutex_clear(&self->destroy_lock);
       g_free(self);
     }
 }
 
 /**
- * z_stacked_proxy_new:
- * @client_stream: client side stream
- * @server_stream: server side stream
- * @control_stream: control stream
- * @proxy: ZProxy instance which initiated stacking
- * @child_proxy: ZProxy instance of the 'child' proxy
+ * Create a new ZStackedProxy instance.
+ *
+ * @param client_stream client side stream
+ * @param server_stream server side stream
+ * @param control_stream control stream
+ * @param proxy ZProxy instance which initiated stacking
+ * @param child_proxy ZProxy instance of the 'child' proxy
  *
  * This function creates a new ZStackedProxy instance encapsulating
  * information about a stacked proxy instance. This information can be freed
@@ -504,7 +675,7 @@ z_stacked_proxy_new(ZStream *client_stream, ZStream *server_stream, ZStream *con
 
   z_proxy_enter(proxy);
 
-  g_static_mutex_init(&self->destroy_lock);
+  g_mutex_init(&self->destroy_lock);
 
   z_refcount_set(&self->ref_cnt, 1);
   self->flags = flags;
@@ -555,10 +726,12 @@ z_stacked_proxy_new(ZStream *client_stream, ZStream *server_stream, ZStream *con
 }
 
 /**
- * z_stacked_proxy_destroy:
- * @self: ZStackedProxy instance
+ * Free a ZStackedProxy instasnce.
  *
- * This function frees all references associated with a stacked proxy.
+ * @param self ZStackedProxy instance
+ *
+ * This function frees all references associated with a stacked proxy
+ * and closes the control and downstream streams.
  **/
 void
 z_stacked_proxy_destroy(ZStackedProxy *self)
@@ -566,7 +739,7 @@ z_stacked_proxy_destroy(ZStackedProxy *self)
   gint i;
 
   z_enter();
-  g_static_mutex_lock(&self->destroy_lock);
+  g_mutex_lock(&self->destroy_lock);
   self->destroyed = TRUE;
   if (self->control_stream)
     {
@@ -602,7 +775,7 @@ z_stacked_proxy_destroy(ZStackedProxy *self)
       z_proxy_unref(self->proxy);
       self->proxy = NULL;
     }
-  g_static_mutex_unlock(&self->destroy_lock);
+  g_mutex_unlock(&self->destroy_lock);
   z_stacked_proxy_unref(self);
   z_return();
 }

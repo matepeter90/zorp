@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Laszlo Attila Toth
  *
@@ -37,13 +36,46 @@
 #define PROXY_SSL_EXTRACT_PEM(s, l, r) \
   ({ void *p; BIO *bio = BIO_new_mem_buf(s, l); p = r(bio, NULL, NULL, NULL); BIO_free(bio); p; })
 
-typedef struct _ZorpCertificateChain
+class ZorpCertificateChain
 {
+public:
   PyObject_HEAD
   ZCertificateChain *chain;
-} ZorpCertificateChain;
+};
 
-static PyTypeObject z_py_zorp_certificate_chain_type;
+static void z_py_zorp_certificate_chain_free(ZorpCertificateChain *self);
+static PyObject *z_py_zorp_certificate_chain_getattr(PyObject *o, char *name);
+static PyTypeObject z_py_zorp_certificate_chain_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,
+  "Zorp Certificate Chain",                      /* tp_name */
+  sizeof(ZorpCertificateChain),                  /* tp_basicsize */
+  0,                                             /* tp_itemsize */
+  (destructor) z_py_zorp_certificate_chain_free, /* tp_dealloc */
+  (printfunc)0,                                  /* tp_print */
+  z_py_zorp_certificate_chain_getattr,           /* tp_getattr */
+  (setattrfunc)0,                                /* tp_setattr */
+  (cmpfunc)0,                                    /* tp_compare */
+  (reprfunc)0,                                   /* tp_repr */
+  0,                                             /* tp_as_number */
+  0,                                             /* tp_as_sequence */
+  0,                                             /* tp_as_mapping */
+  (hashfunc)0,                                   /* tp_hash */
+  (ternaryfunc)0,                                /* tp_call */
+  (reprfunc)0,                                   /* tp_str */
+  0L,                                            /* tp_getattro */
+  0L,                                            /* tp_setattro */
+  0L,                                            /* tp_as_buffer */
+  0L,                                            /* tp_flags */
+  "ZorpCertificateChain class for Zorp",         /* documentation string */
+  0,                                             /* tp_traverse */
+  0,                                             /* tp_clear */
+  0,                                             /* tp_richcompare */
+  0,                                             /* tp_weaklistoffset */
+  Z_PYTYPE_TRAILER
+};
+
 
 static PyObject *
 z_py_zorp_certificate_chain_new(ZCertificateChain *chain)
@@ -137,16 +169,6 @@ z_py_zorp_certificate_chain_free(ZorpCertificateChain *self)
   PyObject_Del(self);
 }
 
-static PyTypeObject z_py_zorp_certificate_chain_type =
-{
-  PyObject_HEAD_INIT(&PyType_Type)
-  .tp_name = "Zorp Certificate Chain",
-  .tp_basicsize = sizeof(ZorpCertificateChain),
-  .tp_dealloc = (destructor) z_py_zorp_certificate_chain_free,
-  .tp_getattr = z_py_zorp_certificate_chain_getattr,
-  .tp_doc = "ZorpCertificateChain class for Zorp",
-};
-
 ZPolicyObj *
 z_py_ssl_certificate_chain_get(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value)
 {
@@ -172,7 +194,7 @@ z_py_ssl_certificate_chain_set_chain(ZCertificateChain *chain, gchar *input, gsi
     {
       gssize next_len = input_len - (next - input);
 
-      X509 *cert = PROXY_SSL_EXTRACT_PEM(next, next_len, PEM_read_bio_X509);
+      X509 *cert = static_cast<X509 *>(PROXY_SSL_EXTRACT_PEM(next, next_len, PEM_read_bio_X509));
 
       if (!cert)
       {
@@ -191,7 +213,7 @@ z_py_ssl_certificate_chain_set_chain(ZCertificateChain *chain, gchar *input, gsi
 }
 
 int
-z_py_ssl_certificate_chain_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new)
+z_py_ssl_certificate_chain_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UNUSED, gpointer value, ZPolicyObj *new_)
 {
   ZCertificateChain **chain = (ZCertificateChain **) value;
 
@@ -201,10 +223,10 @@ z_py_ssl_certificate_chain_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UN
       *chain = NULL;
     }
 
-  if (PyString_Check(new))
+  if (PyString_Check(new_))
     {
-      gchar *input = PyString_AsString(new);
-      gsize  input_len = PyString_Size(new);
+      gchar *input = PyString_AsString(new_);
+      gsize  input_len = PyString_Size(new_);
 
       char *next = g_strstr_len(input, input_len, "-----BEGIN CERTIFICATE-----");
 
@@ -218,7 +240,7 @@ z_py_ssl_certificate_chain_set(ZProxy *self G_GNUC_UNUSED, gchar *name G_GNUC_UN
 
       if (input_len)
         {
-          X509 *cert = PROXY_SSL_EXTRACT_PEM(input, input_len, PEM_read_bio_X509);
+          X509 *cert = static_cast<X509 *>(PROXY_SSL_EXTRACT_PEM(input, input_len, PEM_read_bio_X509));
 
           if (!cert)
             goto err_msg;

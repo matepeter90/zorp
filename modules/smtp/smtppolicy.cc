@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -77,14 +76,14 @@ smtp_policy_check_request(SmtpProxy *self)
   gchar *response = NULL, *response_param = NULL;
 
   z_proxy_enter(self);
-  entry = g_hash_table_lookup(self->request_policy, self->request->str);
+  entry = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->request_policy, self->request->str));
   if (!entry)
-    entry = g_hash_table_lookup(self->request_policy, "*");
+    entry = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->request_policy, "*"));
   if (!entry)
     z_proxy_return(self, SMTP_REQ_REJECT);
 
   z_policy_lock(self->super.thread);
-  if (!smtp_hash_get_type(entry, &action))
+  if (!smtp_hash_get_type(entry, reinterpret_cast<guint *>(&action)))
     {
       /*LOG
 	This message indicates that the policy type is invalid for the given request and Zorp
@@ -193,12 +192,12 @@ smtp_policy_check_response(SmtpProxy *self)
   else
     key[0] = "Null";
   key[1] = self->response->str;
-  entry = z_dim_hash_table_search(self->response_policy, 2, key);
+  entry = static_cast<ZPolicyObj *>(z_dim_hash_table_search(self->response_policy, 2, key));
   if (!entry)
     z_proxy_return(self, SMTP_RSP_REJECT);
 
   z_policy_lock(self->super.thread);
-  if (!smtp_hash_get_type(entry, &action))
+  if (!smtp_hash_get_type(entry, reinterpret_cast<guint *>(&action)))
     {
       /*LOG
 	This message indicates that the policy type is invalid for the given response and Zorp
@@ -287,19 +286,19 @@ smtp_policy_is_extension_permitted(SmtpProxy *self, gchar *extension)
   z_proxy_enter(self);
 
   /* compatibility, check permit_extensions first */
-  ed = g_hash_table_lookup(known_extensions, extension);
+  ed = static_cast<SmtpExtensionDesc *>(g_hash_table_lookup(known_extensions, extension));
   if (ed && (self->permit_extensions & ed->extension_mask))
     z_proxy_return(self, TRUE);
 
-  e = g_hash_table_lookup(self->extensions, extension);
+  e = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->extensions, extension));
   if (!e)
-    e = g_hash_table_lookup(self->extensions, "*");
+    e = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->extensions, "*"));
 
   if (!e)
     z_proxy_return(self, FALSE);
 
   z_policy_lock(self->super.thread);
-  found = smtp_hash_get_type(e, &verdict);
+  found = smtp_hash_get_type(e, reinterpret_cast<guint *>(&verdict));
   z_policy_unlock(self->super.thread);
 
   z_proxy_return(self, found && (verdict == SMTP_EXT_ACCEPT));

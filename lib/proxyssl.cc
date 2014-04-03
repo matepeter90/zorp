@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Panther
  *
@@ -55,7 +54,7 @@ static void z_proxy_ssl_handshake_destroy(ZProxySSLHandshake *self);
  * @return the new handshake object (cannot return NULL)
  */
 ZProxySSLHandshake *
-z_proxy_ssl_handshake_new(ZProxy * proxy, ZStream *stream, gint side)
+z_proxy_ssl_handshake_new(ZProxy * proxy, ZStream *stream, ZEndpoint side)
 {
   ZProxySSLHandshake *self;
 
@@ -209,7 +208,7 @@ z_proxy_ssl_config_defaults(ZProxy *self)
   self->ssl_opts.permit_invalid_certificates = FALSE;
   self->ssl_opts.permit_missing_crl = TRUE;
 
-  for (ZEndpoint side = 0; side < EP_MAX; side++)
+  for (ZEndpoint side = EP_CLIENT; side < EP_MAX; ++side)
     {
       self->ssl_opts.verify_type[side] = PROXY_SSL_VERIFY_REQUIRED_TRUSTED;
       self->ssl_opts.verify_depth[side] = 4;
@@ -226,6 +225,8 @@ z_proxy_ssl_config_defaults(ZProxy *self)
 
   self->ssl_opts.server_peer_ca_list = sk_X509_NAME_new_null();
   self->ssl_opts.server_check_subject = TRUE;
+
+  self->ssl_opts.tlsext_server_host_name = g_string_new("");
 
   self->ssl_opts.dict = z_policy_dict_new();
 
@@ -333,6 +334,9 @@ z_proxy_ssl_register_vars(ZProxy *self)
   z_policy_dict_register(dict, Z_VT_STRING, "client_ssl_cipher",
                          Z_VF_READ | Z_VF_CFG_WRITE | Z_VF_CONSUME,
                          self->ssl_opts.ssl_cipher[EP_CLIENT]);
+  z_policy_dict_register(dict, Z_VT_STRING, "client_tlsext_server_name",
+                         Z_VF_READ | Z_VF_CFG_READ | Z_VF_CONSUME,
+                         self->ssl_opts.tlsext_server_host_name);
 
   /* server side */
   z_policy_dict_register(dict, Z_VT_HASH, "server_handshake", Z_VF_READ | Z_VF_CFG_READ | Z_VF_CONSUME,
@@ -509,7 +513,7 @@ z_proxy_ssl_callback(ZProxy *self, gint ndx, gchar *name, ZPolicyObj *args, guin
   guint type;
 
   z_proxy_enter(self);
-  tuple = g_hash_table_lookup(self->ssl_opts.handshake_hash[ndx], name);
+  tuple = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->ssl_opts.handshake_hash[ndx], name));
   if (!tuple)
     {
       *retval = PROXY_SSL_HS_ACCEPT;
@@ -544,59 +548,45 @@ z_proxy_ssl_callback(ZProxy *self, gint ndx, gchar *name, ZPolicyObj *args, guin
 }
 
 static gboolean
-z_proxy_ssl_load_local_key(ZProxySSLHandshake *handshake)
+z_proxy_ssl_policy_setup_key(ZProxy *self, ZEndpoint side)
 {
-  ZProxy *self = handshake->proxy;
-  guint ndx = handshake->side;
-  ZSSLSession *session = handshake->session;
-  SSL *ssl;
   guint policy_type;
+  gboolean callback_result;
 
   z_proxy_enter(self);
-  ssl = session->ssl;
 
   z_policy_lock(self->thread);
-  if (!z_proxy_ssl_callback(self, ndx, "setup_key", z_policy_var_build("(i)", ndx), &policy_type) ||
-      policy_type != PROXY_SSL_HS_ACCEPT)
-    {
-      z_policy_unlock(self->thread);
-      z_proxy_log(self, CORE_POLICY, 1, "Error fetching local key/certificate pair; side='%s'", EP_STR(ndx));
-      z_proxy_return(self, FALSE);
-    }
+  callback_result = z_proxy_ssl_callback(self, side, "setup_key", z_policy_var_build("(i)", side), &policy_type);
   z_policy_unlock(self->thread);
 
-  if (self->ssl_opts.local_privkey[ndx] && self->ssl_opts.local_cert[ndx])
+  if (!callback_result || policy_type != PROXY_SSL_HS_ACCEPT)
     {
-      if (!SSL_use_certificate(ssl, z_certificate_chain_get_cert(self->ssl_opts.local_cert[ndx])))
+      z_proxy_log(self, CORE_POLICY, 1, "Error fetching local key/certificate pair; side='%s'", EP_STR(side));
+      z_proxy_return(self, FALSE);
+    }
+
+  z_proxy_return(self, TRUE);
+}
+
+gboolean
+z_proxy_ssl_use_local_cert_and_key(ZProxy *self, ZEndpoint side, SSL *ssl)
+{
+  z_proxy_enter(self);
+
+  if (self->ssl_opts.local_privkey[side] && self->ssl_opts.local_cert[side])
+    {
+      if (!SSL_use_certificate(ssl, z_certificate_chain_get_cert(self->ssl_opts.local_cert[side])))
         {
           z_proxy_log(self, CORE_ERROR, 3, "Unable to set certificate to use in the SSL session;");
           z_proxy_return(self, FALSE);
         }
-      if (!SSL_use_PrivateKey(ssl, self->ssl_opts.local_privkey[ndx]))
+      if (!SSL_use_PrivateKey(ssl, self->ssl_opts.local_privkey[side]))
         {
           z_proxy_log(self, CORE_ERROR, 3, "Unable to set private key to use in the SSL session;");
           z_proxy_return(self, FALSE);
         }
-
-      gsize chain_len = z_certificate_chain_get_chain_length(self->ssl_opts.local_cert[ndx]);
-      if (chain_len)
-        {
-          for (gsize i = 0; i != chain_len; ++i)
-            {
-              X509 *cert = z_certificate_chain_get_cert_from_chain(self->ssl_opts.local_cert[ndx], i);
-
-              CRYPTO_add(&cert->references, 1, CRYPTO_LOCK_X509);
-              if (!SSL_CTX_add_extra_chain_cert(ssl->ctx, cert))
-                {
-                  X509_free(cert);
-                  z_proxy_log(self, CORE_ERROR, 3, "Failed to add the complete certificate chain "
-                              "to the SSL session; index='%" G_GSIZE_FORMAT "'", i);
-                  z_proxy_return(self, FALSE);
-                }
-            }
-        }
     }
-  else if (ndx == EP_CLIENT)
+  else if (side == EP_CLIENT)
     {
       z_proxy_log(self, CORE_ERROR, 3,
                   "No local key is set for the client side, either missing keys "
@@ -605,11 +595,67 @@ z_proxy_ssl_load_local_key(ZProxySSLHandshake *handshake)
   z_proxy_return(self, TRUE);
 }
 
+/**
+ * Add certificate chain contents as extra certs to the SSL context.
+ *
+ * @param self  the proxy instance
+ * @param side  the side we're doing the SSL handshake on
+ * @param ssl   the SSL object used in the handshake
+ *
+ * Note that the certificates are simply added to the existing chain, without checking the previous contents.
+ *
+ * @return      TRUE if adding the certificates was successful, FALSE otherwise
+ */
+static gboolean
+z_proxy_ssl_append_local_cert_chain(ZProxy *self, const ZEndpoint side, SSL *ssl)
+{
+  z_proxy_enter(self);
+
+  if (self->ssl_opts.local_cert[side])
+    {
+      gsize chain_len = z_certificate_chain_get_chain_length(self->ssl_opts.local_cert[side]);
+      for (gsize i = 0; i != chain_len; ++i)
+        {
+          X509 *cert = z_certificate_chain_get_cert_from_chain(self->ssl_opts.local_cert[side], i);
+
+          CRYPTO_add(&cert->references, 1, CRYPTO_LOCK_X509);
+          if (!SSL_CTX_add_extra_chain_cert(ssl->ctx, cert))
+            {
+              X509_free(cert);
+              z_proxy_log(self, CORE_ERROR, 3, "Failed to add the complete certificate chain "
+                          "to the SSL session; index='%" G_GSIZE_FORMAT "'", i);
+              z_proxy_return(self, FALSE);
+            }
+        }
+    }
+  z_proxy_return(self, TRUE);
+}
+
+static gboolean
+z_proxy_ssl_load_local_key(ZProxySSLHandshake *handshake)
+{
+  ZProxy *self = handshake->proxy;
+  ZEndpoint side = handshake->side;
+  ZSSLSession *session = handshake->session;
+  SSL *ssl = session->ssl;
+
+  z_proxy_enter(self);
+
+  if (!z_proxy_ssl_policy_setup_key(self, side)
+      || !z_proxy_ssl_use_local_cert_and_key(self, side, ssl)
+      || !z_proxy_ssl_append_local_cert_chain(self, side, ssl))
+    {
+      z_proxy_return(self, FALSE);
+    }
+
+  z_proxy_return(self, TRUE);
+}
+
 static gboolean
 z_proxy_ssl_load_local_ca_list(ZProxySSLHandshake *handshake)
 {
   ZProxy *self = handshake->proxy;
-  guint ndx = handshake->side;
+  ZEndpoint ndx = handshake->side;
   ZSSLSession *session = handshake->session;
   int i, n;
   X509_STORE *ctx;
@@ -653,7 +699,7 @@ z_proxy_ssl_load_local_ca_list(ZProxySSLHandshake *handshake)
 static gboolean
 z_proxy_ssl_load_local_crl_list(ZProxySSLHandshake *handshake, gchar *name)
 {
-  guint ndx = handshake->side;
+  ZEndpoint ndx = handshake->side;
   ZSSLSession *session = handshake->session;
   ZProxy *self = handshake->proxy;
   X509_STORE *ctx = session->ssl->ctx->cert_store;
@@ -692,7 +738,7 @@ z_proxy_ssl_app_verify_cb(X509_STORE_CTX *ctx, void *user_data)
 {
   ZProxySSLHandshake *handshake = (ZProxySSLHandshake *) user_data;
   ZProxy *self = handshake->proxy;
-  gint side = handshake->side;
+  ZEndpoint side = handshake->side;
 
   gboolean new_verify_callback, success;
   guint verdict;
@@ -813,7 +859,7 @@ z_proxy_ssl_verify_peer_cert_cb(int ok, X509_STORE_CTX *ctx)
   SSL *ssl = (SSL *) X509_STORE_CTX_get_app_data(ctx);
   ZProxySSLHandshake *handshake = (ZProxySSLHandshake *) SSL_get_app_data(ssl);
   ZProxy *self = handshake->proxy;
-  gint side = handshake->side;
+  ZEndpoint side = handshake->side;
   X509_OBJECT obj;
   X509_CRL *crl;
   X509_NAME *subject, *issuer;
@@ -993,7 +1039,7 @@ z_proxy_ssl_client_cert_cb(SSL *ssl, X509 **cert, EVP_PKEY **pkey)
 {
   ZProxySSLHandshake *handshake = (ZProxySSLHandshake *) SSL_get_app_data(ssl);
   ZProxy *self = handshake->proxy;;
-  gint side = handshake->side;
+  ZEndpoint side = handshake->side;
   gint res;
 
   z_proxy_enter(self);
@@ -1032,6 +1078,69 @@ z_proxy_ssl_client_cert_cb(SSL *ssl, X509 **cert, EVP_PKEY **pkey)
     }
   z_proxy_return(self, res);
 }
+
+static gboolean
+z_proxy_ssl_policy_set_servername(ZProxy *self, ZEndpoint side)
+{
+  guint policy_type;
+  gboolean callback_result;
+
+  z_proxy_enter(self);
+
+  z_policy_lock(self->thread);
+  callback_result = z_proxy_ssl_callback(self, side, "set_servername", z_policy_var_build("(i)", side), &policy_type);
+  z_policy_unlock(self->thread);
+
+  if (!callback_result || policy_type != PROXY_SSL_HS_ACCEPT)
+    {
+      z_proxy_log(self, CORE_POLICY, 1, "Error in set_servername; side='%s'", EP_STR(side));
+      z_proxy_return(self, FALSE);
+    }
+
+  z_proxy_return(self, TRUE);
+}
+
+int
+z_proxy_ssl_tlsext_servername_cb(SSL *ssl, int *_ad G_GNUC_UNUSED, void *_arg G_GNUC_UNUSED)
+{
+  ZProxySSLHandshake *handshake = (ZProxySSLHandshake *) SSL_get_app_data(ssl);
+  ZProxy *self;
+  ZEndpoint side;
+  const gchar *server_name;
+
+  g_assert(handshake);
+
+  self = handshake->proxy;
+  side = handshake->side;
+
+  z_proxy_enter(self);
+
+  if (side == EP_SERVER)
+    goto exit;
+
+  server_name = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
+
+  if (server_name == NULL)
+    goto exit;
+
+  g_string_assign(self->ssl_opts.tlsext_server_host_name, server_name);
+  z_proxy_log(self, CORE_INFO, 6, "TLS Server Name Indication extension; side='%s', server_name='%s'",
+              EP_STR(side), server_name);
+
+  // Performance optimization only: skip cert/key change entirely when policy callback does not exist
+  if (!z_proxy_ssl_callback_exists(self, side, "set_servername"))
+    goto exit;
+
+  if (!z_proxy_ssl_policy_set_servername(self, side)
+      || !z_proxy_ssl_use_local_cert_and_key(self, side, ssl))
+    {
+      z_proxy_return(self, SSL_TLSEXT_ERR_ALERT_FATAL);
+    }
+
+ exit:
+  z_proxy_return(self, SSL_TLSEXT_ERR_OK);
+}
+
 
 static gboolean
 z_proxy_ssl_handshake_timeout(gpointer user_data)
@@ -1336,7 +1445,7 @@ z_proxy_ssl_do_handshake(ZProxySSLHandshake *handshake,
        * is done
        */
       z_stream_set_timeout(handshake->stream, handshake->proxy->ssl_opts.handshake_timeout);
-      z_proxy_ssl_handshake_cb(handshake->stream, 0, (gpointer) handshake);
+      z_proxy_ssl_handshake_cb(handshake->stream, static_cast<GIOCondition>(0), reinterpret_cast<gpointer>(handshake));
       z_stream_set_timeout(handshake->stream, -2);
     }
 
@@ -1358,7 +1467,7 @@ static gboolean
 z_proxy_ssl_setup_handshake(ZProxySSLHandshake *handshake)
 {
   ZProxy *self = handshake->proxy;
-  gint side = handshake->side;
+  ZEndpoint side = handshake->side;
   SSL_CTX *ctx;
   SSL *tmpssl;
   ZSSLSession *ssl;
@@ -1473,19 +1582,21 @@ z_proxy_ssl_setup_handshake(ZProxySSLHandshake *handshake)
         }
     }
 
+  /* TLS Server Name Indication extension support */
+  SSL_CTX_set_tlsext_servername_callback(ctx, z_proxy_ssl_tlsext_servername_cb);
+
   tmpssl = SSL_new(ctx);
-  SSL_set_options(tmpssl, SSL_MODE_ENABLE_PARTIAL_WRITE);
-  SSL_set_app_data(tmpssl, handshake);
-
-  /* Give the SSL context to the handshake class after
-     cleaning up the current one */
-
   if (!tmpssl)
     {
       z_proxy_log(self, CORE_ERROR, 1, "Error allocating SSL struct; side='%s'", EP_STR(side));
       z_proxy_return(self, FALSE);
     }
 
+  SSL_set_options(tmpssl, SSL_MODE_ENABLE_PARTIAL_WRITE);
+  SSL_set_app_data(tmpssl, handshake);
+
+  /* Give the SSL context to the handshake class after
+     cleaning up the current one */
   if (handshake->session)
     z_ssl_session_unref(handshake->session);
 
@@ -1494,6 +1605,7 @@ z_proxy_ssl_setup_handshake(ZProxySSLHandshake *handshake)
 
   if (handshake->ssl_context)
     SSL_CTX_free(handshake->ssl_context);
+
   handshake->ssl_context = ctx;
 
   if (!ssl)
@@ -1576,7 +1688,7 @@ z_proxy_ssl_perform_handshake(ZProxySSLHandshake *handshake)
  * @return TRUE if setup was successful, FALSE otherwise
  */
 gboolean
-z_proxy_ssl_init_stream(ZProxy *self, gint side)
+z_proxy_ssl_init_stream(ZProxy *self, ZEndpoint side)
 {
   gboolean rc = TRUE;
 
@@ -1703,7 +1815,7 @@ z_proxy_ssl_init_completed(ZProxySSLHandshake *handshake, gpointer user_data)
  * @return TRUE if the setup (and possible handshake) succeeded, FALSE otherwise
  */
 gboolean
-z_proxy_ssl_init_stream_nonblocking(ZProxy *self, gint side)
+z_proxy_ssl_init_stream_nonblocking(ZProxy *self, ZEndpoint side)
 {
   gboolean res = TRUE;
 
@@ -1756,7 +1868,7 @@ z_proxy_ssl_init_stream_nonblocking(ZProxy *self, gint side)
  * @return TRUE if the handshake was successful, FALSE if not
  */
 gboolean
-z_proxy_ssl_request_handshake(ZProxy *self, gint side, gboolean forced)
+z_proxy_ssl_request_handshake(ZProxy *self, ZEndpoint side, gboolean forced)
 {
   gboolean rc = FALSE;
   ZProxySSLHandshake *handshake;
@@ -1859,7 +1971,7 @@ z_proxy_ssl_request_handshake(ZProxy *self, gint side, gboolean forced)
  *
  */
 void
-z_proxy_ssl_clear_session(ZProxy *self, gint side)
+z_proxy_ssl_clear_session(ZProxy *self, ZEndpoint side)
 {
   z_proxy_enter(self);
 

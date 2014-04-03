@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : bazsi
  * Auditor : kisza
@@ -31,6 +30,43 @@
 
 #include <zorp/pyproxygroup.h>
 #include <zorp/pyproxy.h>
+
+/**
+ * @brief Bind C proxy implementation to policy object
+ * @param python_proxy policy object to bind
+ * @return TRUE if succeeded, FALSE otherwise
+ *
+ * @note Must be called with the policy lock held!
+ *
+ * @note In case this function returns FALSE a Python exception has been raised
+ * and the caller must return an error.
+ *
+ */
+static gboolean
+bind_policy_object_to_lowlevel_implementation(ZPolicyObj *python_proxy)
+{
+  ZPolicyProxyBindImplementationResult res;
+
+  res = z_policy_proxy_bind_implementation(python_proxy);
+  switch (res)
+    {
+    case Z_POLICY_PROXY_BIND_IMPL_FAILED:
+      PyErr_SetString(PyExc_RuntimeError, "Error binding proxy implementation");
+      return FALSE;
+      break;
+
+    case Z_POLICY_PROXY_BIND_IMPL_LICENSE_ERROR:
+      z_policy_raise_exception("LicenseException", "Number of licensed IPs exceeded");
+      return FALSE;
+      break;
+
+    case Z_POLICY_PROXY_BIND_IMPL_OK:
+      return TRUE;
+      break;
+    }
+
+  g_assert_not_reached();
+}
 
 /**
  * z_policy_proxy_group_start:
@@ -54,9 +90,9 @@ z_policy_proxy_group_start(gpointer user_data, ZPolicyObj *args, ZPolicyObj *kw 
       return NULL;
     }
 
-  if (!z_policy_proxy_bind_implementation(proxy_instance))
+  if (!bind_policy_object_to_lowlevel_implementation(proxy_instance))
     {
-      PyErr_SetString(PyExc_RuntimeError, "Error binding proxy implementation");
+      /* we already have a raised an exception */
       return NULL;
     }
 

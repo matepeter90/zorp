@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : SaSa
  * Auditor :
@@ -43,8 +42,6 @@
 
 /* support functions for ZConnection */
 /**
- * z_connection_new:
- *
  * Construct a new ZConnection instance and return a pointer to it.
  **/
 ZConnection *
@@ -54,16 +51,17 @@ z_connection_new(void)
 }
 
 /**
- * z_connection_format:
- * @conn: ZConnection instance
- * @buf: buffer to put output into
- * @buflen: size of @buf
+ * Return a string representation of the connection.
+ *
+ * @param conn ZConnection instance
+ * @param buf buffer to put output into
+ * @param buflen size of @buf
  *
  * This function creates a textual representation of the ZConnection. It
  * puts its output into @buf ensuring that the output's size does not exceed
- * @buflen.
+ * @param buflen.
  *
- * Returns: the address of the first character in @buf
+ * @return the address of the first character in @buf
  **/
 gchar *
 z_connection_format(ZConnection *conn, gchar *buf, gint buflen)
@@ -94,8 +92,8 @@ z_connection_format(ZConnection *conn, gchar *buf, gint buflen)
 
 /**
  * z_connection_destroy:
- * @conn: ZConnection instance
- * @close: specifies whether connection to the peer should be closed
+ * @param conn ZConnection instance
+ * @param close specifies whether connection to the peer should be closed
  *
  * This function destructs and frees a ZConnection instance.
  **/

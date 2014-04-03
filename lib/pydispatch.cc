@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -271,8 +270,43 @@ typedef struct _ZPolicyDispatch
   PyObject *handler;
 } ZPolicyDispatch;
 
-static PyTypeObject z_policy_dispatch_type;
-static PyMethodDef z_policy_dispatch_methods[];
+static void z_policy_dispatch_free(ZPolicyDispatch *self);
+static PyObject *z_policy_dispatch_getattr(PyObject *o, char *name);
+static PyTypeObject z_policy_dispatch_type =
+{
+  PyObject_HEAD_INIT(&PyType_Type)
+  0,                                       /* ob_size */
+  "ZPolicyDispatch",                       /* tp_name */
+  sizeof(ZPolicyDispatch),                 /* tp_basicsize */
+  0,                                       /* tp_itemsize */
+  (destructor) z_policy_dispatch_free,     /* tp_dealloc */
+  0,                                       /* tp_print */
+  (getattrfunc) z_policy_dispatch_getattr, /* tp_getattr */
+  0, /* tp_setattr */
+  0, /* tp_compare */
+  0, /* tp_repr */
+  0, /* tp_as_number */
+  0, /* tp_as_sequence */
+  0, /* tp_as_mapping */
+  0, /* tp_hash */
+  0, /* tp_call */
+  0, /* tp_str */
+  0, /* space for future axpansion */
+  0,
+  0,
+  0,
+  "ZPolicyDispatch class for Zorp", /* documentation string */
+  0, 0, 0, 0,
+  Z_PYTYPE_TRAILER
+};
+
+static PyObject *z_policy_dispatch_destroy_method(ZPolicyDispatch *self, PyObject *args G_GNUC_UNUSED);
+static PyMethodDef z_policy_dispatch_methods[] =
+{
+  { "destroy",     (PyCFunction) z_policy_dispatch_destroy_method, 0, NULL },
+  { NULL,          NULL, 0, NULL }   /* sentinel*/
+};
+
 
 /**
  * z_policy_dispatch_accept:
@@ -614,22 +648,6 @@ z_policy_dispatch_free(ZPolicyDispatch *self)
     }
   PyObject_Del(self);
 }
-
-static PyMethodDef z_policy_dispatch_methods[] =
-{
-  { "destroy",     (PyCFunction) z_policy_dispatch_destroy_method, 0, NULL },
-  { NULL,          NULL, 0, NULL }   /* sentinel*/
-};
-
-static PyTypeObject z_policy_dispatch_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type, 0)
-  .tp_name = "ZPolicyDispatch",
-  .tp_basicsize = sizeof(ZPolicyDispatch),
-  .tp_dealloc = (destructor) z_policy_dispatch_free,
-  .tp_getattr =(getattrfunc) z_policy_dispatch_getattr,
-  .tp_doc = "ZPolicyDispatch class for Zorp",
-};
 
 /**
  * z_policy_dispatch_get_kzorp_result

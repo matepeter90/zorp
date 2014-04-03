@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : SaSa
  * Auditor :
@@ -50,11 +49,11 @@
  */
 
 /**
- * z_dim_hash_key_free:
- * @num Number of dimensions (==key parts)
- * @key Key vector
+ * Deallocates a key vector.
  *
- * Deallocates a key vector
+ * @param num Number of dimensions (==key parts)
+ * @param key Key vector
+ *
  */
 void
 z_dim_hash_key_free(int num, gchar **key)
@@ -72,15 +71,16 @@ z_dim_hash_key_free(int num, gchar **key)
 }
 
 /**
- * z_dim_hash_nextstep:
- * @key Key to alter
- * @flags Flag that specify the required modification
+ * Generate next key to look up.
+ *
+ * @param key Key to alter
+ * @param flags Flag that specify the required modification
  *
  * Helper for z_dim_hash_table_rec_search:
  * Alter key according to flags. If flags is DIMHASH_WILDCARD, then clear key,
  * if it's DIMHASH_CONSUME, then trim the last character only.
  *
- * Returns: Whether the operation was possible
+ * @return TRUE if the operation was possible
  */
 static gboolean
 z_dim_hash_nextstep(gchar *key, guint flags)
@@ -111,17 +111,17 @@ z_dim_hash_nextstep(gchar *key, guint flags)
 }
 
 /**
- * z_dim_hash_table_makekey:
- * @new_key Destination of the composite key
- * @key_len Length of the destination buffer
- * @self Not used
- * @num Number of dimensions (key parts)
- * @key_parts Keys for dimensions, empty string or "*" means 'not specified'
+ * Creates a composite key from the dimensional key parts.
  *
- * Creates a composite key from the dimensional key parts. The composite key
- * is a '::'-separated concatenation of the parts.
+ * @param new_key Destination of the composite key
+ * @param key_len Length of the destination buffer
+ * @param self Not used
+ * @param num Number of dimensions (key parts)
+ * @param key_parts Keys for dimensions, empty string or "*" means 'not specified'
  *
- * Returns: TRUE on success, FALSE if the destination buffer is too short
+ * The composite key is a '::'-separated concatenation of the parts.
+ *
+ * @return TRUE on success, FALSE if the destination buffer is too short
  */
 static gboolean
 z_dim_hash_table_makekey(gchar *new_key, guint key_len, ZDimHashTable *self G_GNUC_UNUSED, guint num, gchar **key_parts)
@@ -151,21 +151,21 @@ z_dim_hash_table_makekey(gchar *new_key, guint key_len, ZDimHashTable *self G_GN
 }
 
 /**
- * z_dim_hash_table_rec_search:
- * @self ZDimHashTable to search in
- * @num Number of specified keys
- * @num Depth of recursivity, the index of the currently processed key (internal)
- * @keys The current state of the key vector that's searched for
- * @save_keys The original key vector to search for
- *
  * Performs a recursive (depth) search for a key vector.
+ *
+ * @param self ZDimHashTable to search in
+ * @param num Number of specified keys
+ * @param num Depth of recursivity, the index of the currently processed key (internal)
+ * @param keys The current state of the key vector that's searched for
+ * @param save_keys The original key vector to search for
+ *
  * First it tries to find an exact match, then processes the last key according
  * to the flags of self (either DIMHASH_WILDCARD=wipe it at once or
  * DIMHASH_CONSUME=shrink it char-by-char), and tries to find a match.
  * If no match found, performs the same on the one-but-last and the last key,
  * and so on.
  *
- * Returns: NULL if no matching entry found, the first matching entry otherwise
+ * @return NULL if no matching entry found, the first matching entry otherwise.
  */
 static gpointer *
 z_dim_hash_table_rec_search(ZDimHashTable *self, guint num, guint i, gchar **keys, gchar **save_keys)
@@ -186,19 +186,19 @@ z_dim_hash_table_rec_search(ZDimHashTable *self, guint num, guint i, gchar **key
   if (z_dim_hash_table_makekey(key, keylen, self, num, keys) &&
       (key != NULL))
     {
-      ret = g_hash_table_lookup(self->hash, key);
+      ret = static_cast<gpointer *>(g_hash_table_lookup(self->hash, key));
       z_return(ret);
     }
   z_return(NULL);
 }
 
 /**
- * z_dim_hash_table_new:
- * @minnum Minimal number of specified dimensions for operations
- * @num Number of dimensions
- * @vararg Flags for the dimensions
+ * Create a new ZDimHashTable instance.
  *
- * Create a new ZDimHashTable instance
+ * @param minnum Minimal number of specified dimensions for operations
+ * @param num Number of dimensions
+ * @param vararg Flags for the dimensions
+ *
  * The flags of the dimensions may be either DIMHASH_WILDCARD or DIMHASH_CONSUME,
  * specifying what modifications shall be performed on the key when doing a
  * recursive search (see z_dim_hash_table_rec_search).
@@ -223,10 +223,11 @@ z_dim_hash_table_new(guint minnum, guint num, ...)
 }
 
 /**
- * z_dim_hash_table_free_item:
- * @key The composite key of the hash entry
- * @value The value of the hash entry
- * @user_data The function to use for freeing the value
+ * Free a dimhash hash table item.
+ *
+ * @param key The composite key of the hash entry
+ * @param value The value of the hash entry
+ * @param user_data The function to use for freeing the value
  *
  * Helper for 'z_dim_hash_table_free', called during the hash traversal.
  * Frees a hash entry, using 'user_data' for deallocating the value and 'g_free'
@@ -237,7 +238,7 @@ z_dim_hash_table_new(guint minnum, guint num, ...)
 static gboolean
 z_dim_hash_table_free_item(gpointer key, gpointer value, gpointer user_data)
 {
-  gboolean (*fn)(void *) = user_data;
+  gboolean (*fn)(void *) = reinterpret_cast<gboolean(*)(void *)>(user_data);
 
   z_enter();
   fn(value);
@@ -246,18 +247,17 @@ z_dim_hash_table_free_item(gpointer key, gpointer value, gpointer user_data)
 }
 
 /**
- * z_dim_hash_table_free:
- * @self The ZDimHashTable instance to free
- * @func The function to use for freeing the values in the hash
+ * Iterates through the hash and frees all values using a provided destroy callback.
  *
- * Iterates through the hash and frees all values using 'func'
+ * @param self The ZDimHashTable instance to free
+ * @param func The function to use for freeing the values in the hash
  */
 void
 z_dim_hash_table_free(ZDimHashTable *self, ZDimHashFreeFunc func)
 {
   z_enter();
   if (func)
-    g_hash_table_foreach_remove(self->hash, z_dim_hash_table_free_item, func);
+    g_hash_table_foreach_remove(self->hash, z_dim_hash_table_free_item, reinterpret_cast<gpointer>(func));
   g_hash_table_destroy(self->hash);
   g_free(self->flags);
   g_free(self);
@@ -265,17 +265,16 @@ z_dim_hash_table_free(ZDimHashTable *self, ZDimHashFreeFunc func)
 }
 
 /**
- * z_dim_hash_table_lookup:
- * @self The ZDimHashTable to search in
- * @num Number of dimensions (keys) specified
- * @keys The key vector to search for
- *
  * Search an entry of the hash that matches the specified key vector.
+ *
+ * @param self The ZDimHashTable to search in
+ * @param num Number of dimensions (keys) specified
+ * @param keys The key vector to search for
+ *
  * Empty strings and "*" are treated as non-specified elements.
  *
- * Returns:
- * NULL if too many or too few keys are specified or no matching entry found,
- * a pointer to the matching entry otherwise.
+ * @return NULL if too many or too few keys are specified or no
+ * matching entry found, a pointer to the matching entry otherwise.
  */
 gpointer
 z_dim_hash_table_lookup(ZDimHashTable *self, guint num, gchar **keys)
@@ -288,18 +287,17 @@ z_dim_hash_table_lookup(ZDimHashTable *self, guint num, gchar **keys)
   if (self->minkeynum > num || self->keynum < num)
     z_return(NULL);
   if (z_dim_hash_table_makekey(key, keylen, self, num, keys))
-    ret = g_hash_table_lookup(self->hash, key);
+    ret = static_cast<gpointer *>(g_hash_table_lookup(self->hash, key));
   z_return(ret);
 }
 
 /**
- * z_dim_hash_table_delete:
- * @self ZDimHashTable instance to delete from
- * @num Number of specified keys
- * @keys Key vector
- * @func The function to use for freeing entry values
+ * Delete the matching entry from the hash.
  *
- * Delete the matching entry from the hash
+ * @param self ZDimHashTable instance to delete from
+ * @param num Number of specified keys
+ * @param keys Key vector
+ * @param func The function to use for freeing entry values
  */
 void
 z_dim_hash_table_delete(ZDimHashTable *self, guint num, gchar **keys, ZDimHashFreeFunc func)
@@ -324,13 +322,13 @@ z_dim_hash_table_delete(ZDimHashTable *self, guint num, gchar **keys, ZDimHashFr
 }
 
 /**
- * z_dim_hash_table_insert:
- * @self ZDimHashTable instance to insert into
- * @value The value to insert
- * @num Number of specified keys
- * @keys Key vector
+ * Insert an entry into the hash.
  *
- * Insert an entry into the hash
+ * @param self ZDimHashTable instance to insert into
+ * @param value The value to insert
+ * @param num Number of specified keys
+ * @param keys Key vector
+ *
  */
 void
 z_dim_hash_table_insert(ZDimHashTable *self, gpointer value, guint num, gchar **keys)
@@ -352,15 +350,14 @@ z_dim_hash_table_insert(ZDimHashTable *self, gpointer value, guint num, gchar **
 }
 
 /**
- * z_dim_hash_table_search:
- * @self ZDimHashTable instance to search in
- * @num Number of specified keys
- * @keys Key vector
+ * Searches self for an entry whose key matches the specified key vector.
  *
- * Searches self for an entry whose key matches the specified key vector
+ * @param self ZDimHashTable instance to search in
+ * @param num Number of specified keys
+ * @param keys Key vector
  *
- * Returns: NULL if error happened or no match found, or a pointer to the
- * matching entry
+ * @return NULL if error happened or no match found, or a pointer to
+ * the matching entry
  */
 gpointer
 z_dim_hash_table_search(ZDimHashTable *self, guint num, gchar **keys)
@@ -375,7 +372,7 @@ z_dim_hash_table_search(ZDimHashTable *self, guint num, gchar **keys)
 
   for (i = 0; i < num; i++)
     {
-      save_keys[i] = alloca(DIMHASH_MAX_KEYSIZE);
+      save_keys[i] = static_cast<gchar *>(alloca(DIMHASH_MAX_KEYSIZE));
       strncpy(save_keys[i], keys[i], DIMHASH_MAX_KEYSIZE - 1);
       save_keys[i][DIMHASH_MAX_KEYSIZE-1] = 0;
     }

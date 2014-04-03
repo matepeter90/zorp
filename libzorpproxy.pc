@@ -1,4 +1,4 @@
-prefix=/home/coroner/zwa/install/zorp-gpl-5.0
+prefix=/home/coroner/src/zorp
 exec_prefix=${prefix}
 libdir=${prefix}/lib
 includedir=${prefix}/include
@@ -8,6 +8,6 @@ datadir=${datarootdir}
 Name: ZorpLibProxy
 Description: Zorp Lib for Proxies
 Requires: libzorp
-Version: 3.9.8
+Version: 5.0.0
 Libs: -lzorpproxy -L${prefix}/lib
 Cflags: -I${prefix}/include

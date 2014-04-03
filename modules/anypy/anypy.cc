@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Bazsi
  * Auditor: Bazsi
@@ -38,24 +37,33 @@
 #include <zorp/registry.h>
 #include <zorp/log.h>
 #include <zorp/streamline.h>
+#include <zorp/proxystack.h>
 
 #define ANYPY_ERROR "anypy.error"
 
-typedef struct _AnyPyProxy
+/**
+ * Proxy class for implementing proxies in Python.
+ *
+ * \extends Proxy
+ */
+typedef struct
 {
   ZProxy super;
   guint max_line_length[EP_MAX];
+  GList *stacked_proxies;
 } AnyPyProxy;
 
 extern ZClass AnyPyProxy__class;
 
 /**
- * anypy_stream_init:
- * @self: AnyPyProxy instance
+ * Initialize client and server-side streams.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AnyPyProxy instance
  *
  * This function is called upon startup to initialize our streams.
  **/
-
 static gboolean
 anypy_stream_init(AnyPyProxy *self)
 {
@@ -74,17 +82,20 @@ anypy_stream_init(AnyPyProxy *self)
 }
 
 /**
- * anypy_set_verdict:
- * @self: AnyPyProxy instance
- * @args: Python args argument
+ * Set verdict for the parent proxy.
  *
- * sets verdict for the parent proxy
- * args is (verdict,description)
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AnyPyProxy instance
+ * @param args verdict as a (verdict, description) tuple
+ *
+ * Parses #args tuple and calls the set_verdict method of the stacking
+ * interface of the parent proxy.
  **/
 static ZPolicyObj *
 anypy_set_verdict(AnyPyProxy * self, ZPolicyObj *args)
 {
-  gint verdict;
+  ZVerdict verdict;
   gchar *description;
 
   z_proxy_enter(self);
@@ -110,12 +121,17 @@ anypy_set_verdict(AnyPyProxy * self, ZPolicyObj *args)
 }
 
 /**
- * anypy_set_content_hint:
- * @self: AnyPyProxy instance
- * @args: Python args argument
+ * Set content hint for the parent proxy.
  *
- * sets verdict for the parent proxy
- * args is (verdict,description)
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AnyPyProxy instance
+ * @param args: Python long specifying the length of the content
+ *
+ * Notify our parent proxy of the length of the content we will
+ * output. Must be called before writing anything to the server
+ * stream.
+ *
  **/
 static ZPolicyObj *
 anypy_set_content_hint(AnyPyProxy * self, ZPolicyObj *args)
@@ -146,8 +162,42 @@ anypy_set_content_hint(AnyPyProxy * self, ZPolicyObj *args)
 }
 
 /**
- * anypy_config_set_defaults:
- * @self: AnyPyProxy instance
+ * Trigger stacking of an object.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AnyPyProxy instance
+ * @param args: Python tuple describing method of stacking (eg. (Z_STACK_PROXY, ProxyClass))
+ *
+ * Triggers stacking a proxy instance of the specified stacking method. In case of using Z_STACK_PROXY class in the
+ * passed-in session. Constructing the session (setting streams and
+ * session id at least) is the responsibility of the caller.
+ *
+ **/
+static ZPolicyObj *
+anypy_stack(AnyPyProxy * self, ZPolicyObj *args)
+{
+  ZStackedProxy *stacked_proxy;
+
+  z_proxy_enter(self);
+
+  if (!z_proxy_stack_object(&self->super, args, &stacked_proxy, NULL))
+    {
+      z_policy_raise_exception_obj(z_policy_exc_runtime_error, "Stacking failed.");
+      z_proxy_return(self, NULL);
+    }
+
+  self->stacked_proxies = g_list_prepend(self->stacked_proxies, stacked_proxy);
+
+  z_proxy_return(self, z_policy_none_ref());
+}
+
+/**
+ * Set default values of proxy attributes in the proxy structure.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AnyPyProxy instance
  *
  * This function initializes various attributes exported to the Python layer
  * for possible modification.
@@ -164,12 +214,14 @@ anypy_config_set_defaults(AnyPyProxy *self)
 }
 
 /**
- * anypy_register_vars:
- * @self: AyPyProxy instance
+ * Export proxy attributes to python.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param self AyPyProxy instance
  *
  * This function is called upon startup to export Python attributes.
  **/
-
 static void
 anypy_register_vars(AnyPyProxy *self)
 {
@@ -182,6 +234,10 @@ anypy_register_vars(AnyPyProxy *self)
   z_proxy_var_new(&self->super, "set_content_hint",
         Z_VAR_TYPE_METHOD | Z_VAR_GET,
         self, anypy_set_content_hint);
+  /* method for stacking a proxy in a custom session */
+  z_proxy_var_new(&self->super, "stack",
+        Z_VAR_TYPE_METHOD | Z_VAR_GET,
+        self, anypy_stack);
   /* size of line buffer of the client stream */
   z_proxy_var_new(&self->super, "client_max_line_length",
 	Z_VAR_TYPE_INT | Z_VAR_GET | Z_VAR_SET_CONFIG | Z_VAR_GET_CONFIG,
@@ -194,8 +250,11 @@ anypy_register_vars(AnyPyProxy *self)
 }
 
 /**
- * anypy_config:
- * @s: AnyPyProxy instance casted to ZProxy
+ * Configure proxy.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param s AnyPyProxy instance casted to ZProxy
  *
  * This function is called upon startup to configure the proxy.
  * This calls the the __pre_config__, config and __post_config__ events.
@@ -214,6 +273,13 @@ anypy_config(ZProxy *s)
   return FALSE;
 }
 
+/**
+ * Main method of proxy.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param s AnyPyProxy instance
+ */
 static void
 anypy_main(ZProxy * s)
 {
@@ -231,12 +297,21 @@ anypy_main(ZProxy * s)
   res = z_policy_call(self->super.handler, "proxyThread", NULL, &called, self->super.session_id);
   z_policy_var_unref(res);
   z_policy_unlock(self->super.thread);
+
+  for (GList *i = self->stacked_proxies; i; i = i->next)
+    z_stacked_proxy_destroy((ZStackedProxy *) i->data);
+
+  g_list_free(self->stacked_proxies);
+
   z_proxy_return(self);
 }
 
 /**
- * anypy_proxy_new:
- * @params: parameters for the AnyPyProxy class constructor
+ * Create a new AnyPyProxy.
+ *
+ * @private @memberof AnyPyProxy
+ *
+ * @param params parameters for the AnyPyProxy class constructor
  *
  * This function is called upon startup to create a new AnyPy proxy.
  **/
@@ -255,19 +330,31 @@ ZProxyFuncs anypy_proxy_funcs =
   {
     Z_FUNCS_COUNT(ZProxy),
     NULL
-  },
-  .config = anypy_config,
-  .main = anypy_main,
-  NULL
+  },            /* super */
+  anypy_config, /* config */
+  NULL,         /* startup */
+  anypy_main,   /* main */
+  NULL,         /* shutdown */
+  NULL,         /* destroy */
+  NULL,         /* nonblocking_init */
+  NULL,         /* nonblocking_deinit */
+  NULL,         /* wakeup */
 };
 
 Z_CLASS_DEF(AnyPyProxy, ZProxy, anypy_proxy_funcs);
 
 static ZProxyModuleFuncs anypy_module_funcs =
   {
-    .create_proxy = anypy_proxy_new,
+    /* .create_proxy = */ anypy_proxy_new,
+    /* .module_py_init = */ NULL,
   };
 
+/**
+ * Initialize proxy module.
+ *
+ * Called after Zorp loads the dynamic module to register the proxy
+ * implementation.
+ */
 gint
 zorp_module_init(void)
 {

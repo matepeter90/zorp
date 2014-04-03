@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
+#include <glib.h>
 
 #define PORT 12345
 #define KZ_ATTR_NAME_MAX_LENGTH 1023
@@ -75,7 +76,7 @@ print_kzorp_result(int sock)
     }
   else
     {
-      fprintf(stderr, "Cookie: %" PRIu64 ", client zone: '%s', server zone: '%s', dispatcher: '%s', service: '%s'\n",
+      fprintf(stderr, "Cookie: %" G_GUINT64_FORMAT ", client zone: '%s', server zone: '%s', dispatcher: '%s', service: '%s'\n",
               buf.cookie, buf.czone_name, buf.szone_name, buf.dispatcher_name, buf.service_name);
     }
 }
@@ -83,7 +84,7 @@ print_kzorp_result(int sock)
 int
 main(void)
 {
-  int sock, new;
+  int sock, new_;
   struct sockaddr_in clientname;
   socklen_t size;
 
@@ -97,8 +98,8 @@ main(void)
   fprintf(stderr, "Listening on port %d\n", PORT);
 
   size = sizeof(clientname);
-  new = accept(sock, (struct sockaddr *) &clientname, &size);
-  if (new < 0)
+  new_ = accept(sock, (struct sockaddr *) &clientname, &size);
+  if (new_ < 0)
     {
       perror("accept");
       exit(EXIT_FAILURE);
@@ -108,9 +109,9 @@ main(void)
           inet_ntoa(clientname.sin_addr),
           ntohs(clientname.sin_port));
 
-  print_kzorp_result(new);
+  print_kzorp_result(new_);
 
-  close(new);
+  close(new_);
   close(sock);
 
   exit(EXIT_SUCCESS);

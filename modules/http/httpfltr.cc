@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Balazs Scheidler <bazsi@balabit.hu>
  * Auditor:
@@ -34,7 +33,6 @@
 
 #include <zorp/log.h>
 #include <zorp/io.h>
-#include <zorp/audit.h>
 #include <sys/socket.h>
 #include <netinet/tcp.h>
 
@@ -718,7 +716,7 @@ http_transfer_stack_proxy(ZTransfer2 *s, ZStackedProxy **stacked)
 {
   HttpTransfer *self = Z_CAST(s, HttpTransfer);
   ZPolicyObj *proxy_stack_tuple = NULL, *stack_object = NULL;
-  gint side = self->transfer_from;
+  ZEndpoint side = self->transfer_from;
   gint stack_type = HTTP_STK_NONE;
   gboolean called;
   gboolean success = FALSE;
@@ -1068,8 +1066,8 @@ http_transfer_run(ZTransfer2 *s)
 static HttpTransfer *
 http_transfer_new(HttpProxy *owner,
                   gint transfer_type,
-                  guint from, ZStream *from_stream,
-                  guint to, ZStream *to_stream,
+                  ZEndpoint from, ZStream *from_stream,
+                  ZEndpoint to, ZStream *to_stream,
                   gboolean expect_data, gboolean suppress_data,
                   HttpTransferPreambleFunc format_preamble)
 {
@@ -1111,20 +1109,20 @@ ZTransfer2Funcs http_transfer_funcs =
       Z_FUNCS_COUNT(ZTransfer2),
       http_transfer_free_method,
     },
-    .src_read = http_transfer_src_read,
-    .dst_write = http_transfer_dst_write,
-    .src_shutdown = http_transfer_src_shutdown,
-    .dst_shutdown = http_transfer_dst_shutdown,
-    .stack_proxy = http_transfer_stack_proxy,
-    .setup = http_transfer_setup,
-    .run = http_transfer_run,
-    .progress = NULL
+    /* .src_read = */ http_transfer_src_read,
+    /* .dst_write = */ http_transfer_dst_write,
+    /* .src_shutdown = */ http_transfer_src_shutdown,
+    /* .dst_shutdown = */ http_transfer_dst_shutdown,
+    /* .stack_proxy = */ http_transfer_stack_proxy,
+    /* .setup = */ http_transfer_setup,
+    /* .run = */ http_transfer_run,
+    /* .progress = */ NULL
   };
 
 Z_CLASS_DEF(HttpTransfer, ZTransfer2, http_transfer_funcs);
 
 gboolean
-http_data_transfer(HttpProxy *self, gint transfer_type, guint from, ZStream *from_stream, guint to, ZStream *to_stream, gboolean expect_data, gboolean suppress_data, HttpTransferPreambleFunc format_preamble)
+http_data_transfer(HttpProxy *self, gint transfer_type, ZEndpoint from, ZStream *from_stream, ZEndpoint to, ZStream *to_stream, gboolean expect_data, gboolean suppress_data, HttpTransferPreambleFunc format_preamble)
 {
   HttpTransfer *t;
   gboolean res = TRUE;

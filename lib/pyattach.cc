@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -56,7 +55,38 @@ typedef struct _ZPolicyAttach
   ZSockAddr *local;
 } ZPolicyAttach;
 
-static PyTypeObject z_policy_attach_type;
+static void z_policy_attach_free(ZPolicyAttach *self);
+static PyObject *z_policy_attach_getattr(PyObject *o, char *name);
+static PyTypeObject z_policy_attach_type =
+{
+  PyVarObject_HEAD_INIT(&PyType_Type,0)
+  "ZPolicyAttach",       /* tp_name */
+  sizeof(ZPolicyAttach), /* tp_basicsize */
+  0,                     /* tp_itemsize */
+  (destructor) z_policy_attach_free,     /* tp_dealloc */
+  (printfunc)0,                          /* tp_print */
+  (getattrfunc) z_policy_attach_getattr, /* tp_getattr */
+  (setattrfunc)0,        /* tp_setattr */
+  (cmpfunc)0,            /* tp_compare */
+  (reprfunc)0,           /* tp_repr */
+  0,                     /* tp_as_number */
+  0,                     /* tp_as_sequence */
+  0,                     /* tp_as_mapping */
+  (hashfunc)0,           /* tp_hash */
+  (ternaryfunc)0,        /* tp_call */
+  (reprfunc)0,           /* tp_str */
+  0L,                    /* tp_getattro */
+  0L,                    /* tp_setattro */
+  0L,                    /* tp_as_buffer */
+  0L,                    /* tp_flags */
+  "ZPolicyAttach class for Zorp", /* documentation string */
+  0,                     /* tp_traverse */
+  0,                     /* tp_clear */
+  0,                     /* tp_richcompare */
+  0,                     /* tp_weaklistoffset */
+  Z_PYTYPE_TRAILER
+};
+
 
 /**
  * z_policy_attach_block_method:
@@ -284,16 +314,6 @@ PyMethodDef z_policy_attach_funcs[] =
 {
   { "Attach",  (PyCFunction) z_policy_attach_new_instance, METH_VARARGS | METH_KEYWORDS, NULL },
   { NULL,      NULL, 0, NULL }   /* sentinel*/
-};
-
-static PyTypeObject z_policy_attach_type =
-{
-  PyVarObject_HEAD_INIT(&PyType_Type,0)
-  .tp_name = "ZPolicyAttach",
-  .tp_basicsize = sizeof(ZPolicyAttach),
-  .tp_dealloc = (destructor) z_policy_attach_free,
-  .tp_getattr = (getattrfunc) z_policy_attach_getattr,
-  .tp_doc = "ZPolicyAttach class for Zorp"
 };
 
 /**

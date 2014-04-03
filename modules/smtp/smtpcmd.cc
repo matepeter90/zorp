@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -602,7 +601,7 @@ smtp_request_EHLO(SmtpProxy *self)
 SmtpResponseTypes
 smtp_response_EHLO(SmtpProxy *self)
 {
-  self->active_extensions = 0;
+  self->active_extensions = static_cast<SmtpActionTypes>(0);
 
   if (self->response_lines && strcmp(self->request->str, "HELO") == 0)
     {
@@ -634,7 +633,7 @@ smtp_response_EHLO(SmtpProxy *self)
             {
               remove_ext_from_list = FALSE;
 
-              ext = g_hash_table_lookup(known_extensions, token);
+              ext = static_cast<SmtpExtensionDesc *>(g_hash_table_lookup(known_extensions, token));
               if (ext)
                 {
                   /* this is a known extension */
@@ -1040,7 +1039,7 @@ static struct _SmtpCommandDesc known_commands_table[] =
   { "RSET",     smtp_request_general_noarg, smtp_response_RSET,     NULL,                 SMTP_STATE_INITIAL | SMTP_STATE_EHLO | SMTP_STATE_MAIL_FROM | SMTP_STATE_RCPT_TO | SMTP_STATE_DATA },
   { "QUIT",     smtp_request_general_noarg, smtp_response_QUIT,     NULL,                 SMTP_STATE_INITIAL | SMTP_STATE_EHLO | SMTP_STATE_MAIL_FROM | SMTP_STATE_RCPT_TO | SMTP_STATE_DATA },
   { "STARTTLS", smtp_request_STARTTLS,      smtp_response_STARTTLS, smtp_action_STARTTLS, SMTP_STATE_EHLO },
-  { NULL, NULL, NULL, NULL, 0 }
+  { NULL, NULL, NULL, NULL, static_cast<SmtpStateTypes>(0) }
 };
 
 static struct _SmtpExtensionDesc known_extensions_table[] =
@@ -1051,7 +1050,7 @@ static struct _SmtpExtensionDesc known_extensions_table[] =
   { "8BITMIME",   SMTP_EM_8BITMIME   },
   { "AUTH",       SMTP_EM_AUTH       },
   { "STARTTLS",   SMTP_EM_STARTTLS   },
-  { NULL,         0                  }
+  { NULL,         static_cast<SmtpExtensionTypes>(0) }
 };
 
 GHashTable *known_commands;
@@ -1072,14 +1071,14 @@ smtp_init_cmd_hash(void)
   i = 0;
   while (known_commands_table[i].name != NULL)
     {
-      g_hash_table_insert(known_commands, known_commands_table[i].name, &known_commands_table[i]);
+      g_hash_table_insert(known_commands, const_cast<char *>(known_commands_table[i].name), &known_commands_table[i]);
       i++;
     }
   known_extensions = g_hash_table_new(g_str_hash, g_str_equal);
   i = 0;
   while (known_extensions_table[i].name != NULL)
     {
-      g_hash_table_insert(known_extensions, known_extensions_table[i].name, &known_extensions_table[i]);
+      g_hash_table_insert(known_extensions, const_cast<char *>(known_extensions_table[i].name), &known_extensions_table[i]);
       i++;
     }
 }

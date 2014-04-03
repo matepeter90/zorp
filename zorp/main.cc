@@ -63,7 +63,7 @@ z_logtag_lookup(const gchar *tag, gsize len)
 {
   const struct tagid *p = NULL;
 
-  p = z_logtag_lookup_gperf(tag, len);
+  p = LogTagHash::lookup(tag, len);
   if (G_LIKELY(p))
     return p->id;
   else
@@ -223,7 +223,7 @@ z_set_instance_name(const gchar *option_name G_GNUC_UNUSED, const gchar *value, 
                     GError **error G_GNUC_UNUSED
                    )
 {
-  instance_name = g_strdup(value);
+  instance_name = static_cast<const gchar *>(g_strdup(value));
   instance_policy_list[0] = (gchar *) instance_name;
   instance_count = 1;
   g_clear_error(error);
@@ -239,7 +239,7 @@ z_set_virtual_instance_name(const char *option_name, const gchar *value,
   if (strcmp(option_name, "--slave") == 0)
     zorp_process_master_mode = FALSE;
 
-  virtual_instance_name = g_strdup(value);
+  virtual_instance_name = static_cast<const gchar *>(g_strdup(value));
 
   return TRUE;
 }
@@ -247,14 +247,14 @@ z_set_virtual_instance_name(const char *option_name, const gchar *value,
 static gint deadlock_checker_timeout = DEADLOCK_CHECKER_DEFAULT_TIMEOUT;
 static GOptionEntry zorp_options[] =
 {
-  { "as",           'a',                     0, G_OPTION_ARG_CALLBACK, z_set_instance_name, "Set instance name", "<instance>" },
-  { "master",       0,                       0, G_OPTION_ARG_CALLBACK, z_set_virtual_instance_name, "Run in master mode with the virtual instance name specified", "<virtual-instance>"},
-  { "slave",        0,                       0, G_OPTION_ARG_CALLBACK, z_set_virtual_instance_name, "Run in slave mode with the virtual instance name specified", "<virtual-instance>"},
+  { "as",           'a',                     0, G_OPTION_ARG_CALLBACK, reinterpret_cast<gpointer>(z_set_instance_name), "Set instance name", "<instance>" },
+  { "master",       0,                       0, G_OPTION_ARG_CALLBACK, reinterpret_cast<gpointer>(z_set_virtual_instance_name), "Run in master mode with the virtual instance name specified", "<virtual-instance>"},
+  { "slave",        0,                       0, G_OPTION_ARG_CALLBACK, reinterpret_cast<gpointer>(z_set_virtual_instance_name), "Run in slave mode with the virtual instance name specified", "<virtual-instance>"},
   { "policy",       'p',                     0, G_OPTION_ARG_STRING, &policy_file,          "Set policy file", "<policy>" },
   { "version",      'V',                     0, G_OPTION_ARG_NONE,   &display_version,      "Display version number", NULL },
   { "log-escape",     0,                     0, G_OPTION_ARG_NONE,   &log_escape,           "Escape log messages to avoid non-printable characters", NULL },
   { "deadlock-check-timeout", 0,             0, G_OPTION_ARG_INT,    &deadlock_checker_timeout, "Timeout for deadlock detection queries in seconds", NULL },
-  { NULL,             0,                     0,                   0, NULL,                  NULL, NULL }
+  { NULL,             0,                     0, G_OPTION_ARG_NONE,   NULL,                  NULL, NULL }
 };
 
 static gboolean
@@ -371,7 +371,7 @@ main(int argc, char *argv[])
   instance_policy_list[instance_count] = NULL;
 
   if (!virtual_instance_name)
-    virtual_instance_name = g_strdup(instance_name);
+    virtual_instance_name = static_cast<const gchar *>(g_strdup(instance_name));
 
   if (display_version)
     {

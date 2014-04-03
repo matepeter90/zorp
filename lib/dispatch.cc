@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : SaSa
  * Auditor :
@@ -52,24 +51,24 @@
 #define MAX_DISPATCH_BIND_STRING 128
 
 /* our SockAddr based hash contains elements of this type */
-typedef struct _ZDispatchChain
+struct ZDispatchChain
 {
   guint ref_cnt;
   gchar *session_id;
   ZDispatchBind *registered_key;
   ZSockAddr *bound_addr;
   GList *elements;
-  GStaticRecMutex lock;
+  GRecMutex lock;
   gboolean threaded;
   GAsyncQueue *accept_queue;
   ZDispatchParams params;
   GList *listeners;
   GList *iface_watches;
   ZIfmonGroupWatch *iface_group_watch;
-} ZDispatchChain;
+};
 
 /* Each ZDispatchChain structure contains a list of instances of this type */
-struct _ZDispatchEntry
+struct ZDispatchEntry
 {
   gchar *session_id;
   gint prio;
@@ -93,19 +92,18 @@ G_LOCK_DEFINE_STATIC(dispatch_lock);
  * If both locks are needed the global lock must be acquired first.
  */
 
-typedef struct _ZListenerEntry
+struct ZListenerEntry
 {
   ZListener *listener;
   ZRefCount ref_cnt;
-} ZListenerEntry;
+};
 
 /**
- * z_listener_entry_new:
- * @listener: stolen reference for a ZListener
+ * Creates a new ZListenerEntry object and borrow a reference for the listener.
  *
- * Creates a new ZListenerEntry object and borrow a reference for the listener
+ * @param listener stolen reference for a ZListener
  *
- * Returns: the new listener entry
+ * @return the new listener entry
  */
 ZListenerEntry *
 z_listener_entry_new(ZListener * listener)
@@ -133,13 +131,14 @@ z_listener_entry_ref(ZListenerEntry *self)
 }
 
 /**
- * z_listener_entry_unref:
- * @self: listener entry
+ * Drop refcount of a listener entry.
+ *
+ * @param self listener entry
  *
  * Decreases the reference count of the listener entry. If it reaches zero, the listener entry is freed
  * and the reference count listener inside of the object is decreased.
  *
- * Returns true if the entry is freed
+ * @return TRUE if the entry is freed.
  */
 gboolean
 z_listener_entry_unref(ZListenerEntry *self)
@@ -158,15 +157,15 @@ static gpointer z_dispatch_chain_thread(gpointer st);
 static void z_dispatch_connection(ZDispatchChain *chain, ZConnection *conn);
 
 /**
- * z_dispatch_bind_equal:
- * @key1 1st key
- * @key2 2nd key
+ * Compare two dispatch binds.
+ *
+ * @param key1 1st key
+ * @param key2 2nd key
  *
  * Compares the keys by their IP and port values, used for hash key checking
  * function (g_hash_table_new).
  *
- * Returns:
- * TRUE if they equal
+ * @return TRUE if they equal
  */
 static gboolean
 z_dispatch_bind_equal(ZDispatchBind *key1, ZDispatchBind *key2)
@@ -188,13 +187,10 @@ z_dispatch_bind_equal(ZDispatchBind *key1, ZDispatchBind *key2)
 }
 
 /**
- * z_dispatch_bind_hash:
- * @key The key to generate a hash value from
+ * Generate an integer hash value from a key.
  *
- * Generates an integer hash value from a key
- *
- * Returns:
- * The hash value
+ * @param key The key to generate a hash value from
+ * @return The hash value
  */
 static guint
 z_dispatch_bind_hash(ZDispatchBind *key)
@@ -278,15 +274,16 @@ z_dispatch_bind_init(ZDispatchBind *self, guint type, guint protocol)
 }
 
 /**
- * z_dispatch_bind_new_sa:
- * @addr: socket address
- * @protocol: protocol identifier (ZD_PROTO_*)
+ * Create a sockaddr-bound ZDispatchBind.
  *
- * Create a new ZDispatchBind instance initializing it based on @addr and
- * @protocol. ZDispatchBind instances are used for keying the Dispatch hash
+ * @param addr socket address
+ * @param protocol protocol identifier (ZD_PROTO_*)
+ *
+ * Create a new ZDispatchBind instance initializing it based on addr and
+ * protocol. ZDispatchBind instances are used for keying the Dispatch hash
  * table.
  *
- * Returns: new ZDispatchBind structure
+ * @return new ZDispatchBind structure
  **/
 ZDispatchBind *
 z_dispatch_bind_new_sa(guint protocol, ZSockAddr *addr)
@@ -300,15 +297,16 @@ z_dispatch_bind_new_sa(guint protocol, ZSockAddr *addr)
 }
 
 /**
- * z_dispatch_bind_new_iface:
- * @iface: interface name
- * @protocol: protocol identifier (ZD_PROTO_*)
+ * Create an interface-bound ZDispatchBind.
  *
- * Create a new ZDispatchBind instance initializing it based on @addr and
- * @protocol. ZDispatchBind instances are used for keying the Dispatch hash
+ * @param iface interface name
+ * @param protocol protocol identifier (ZD_PROTO_*)
+ *
+ * Create a new ZDispatchBind instance initializing it based on addr and
+ * protocol. ZDispatchBind instances are used for keying the Dispatch hash
  * table.
  *
- * Returns: new ZDispatchBind structure
+ * @return new ZDispatchBind structure
  **/
 ZDispatchBind *
 z_dispatch_bind_new_iface(guint protocol, const gchar *iface, gint family, const gchar *ip, guint port)
@@ -335,15 +333,16 @@ z_dispatch_bind_new_iface(guint protocol, const gchar *iface, gint family, const
 }
 
 /**
- * z_dispatch_bind_new_iface_group:
- * @group: interface name
- * @protocol: protocol identifier (ZD_PROTO_*)
+ * Create an interface group-bound ZDispatchBind.
  *
- * Create a new ZDispatchBind instance initializing it based on @group and
- * @protocol. ZDispatchBind instances are used for keying the Dispatch hash
+ * @param group interface group
+ * @param protocol protocol identifier (ZD_PROTO_*)
+ *
+ * Create a new ZDispatchBind instance initializing it based on group and
+ * protocol. ZDispatchBind instances are used for keying the Dispatch hash
  * table.
  *
- * Returns: new ZDispatchBind structure
+ * @return new ZDispatchBind structure
  **/
 ZDispatchBind *
 z_dispatch_bind_new_iface_group(guint protocol, guint32 group, gint family, guint port)
@@ -359,10 +358,9 @@ z_dispatch_bind_new_iface_group(guint protocol, guint32 group, gint family, guin
 }
 
 /**
- * z_dispatch_bind_ref:
- * @self: this
+ * Increase refcounter of a ZDispatchBind instance.
  *
- * Add a reference to @self:
+ * @param self this
  **/
 ZDispatchBind *
 z_dispatch_bind_ref(ZDispatchBind *self)
@@ -372,11 +370,11 @@ z_dispatch_bind_ref(ZDispatchBind *self)
 }
 
 /**
- * z_dispatch_bind_unref:
- * @self: this
+ * Decrease refcounter of a ZDispatchBind instance.
  *
- * Decrement reference count for @self and free if that reaches zero.
+ * @param self this
  *
+ * Decrement reference count for self and free if that reaches zero.
  **/
 void
 z_dispatch_bind_unref(ZDispatchBind *self)
@@ -392,42 +390,41 @@ z_dispatch_bind_unref(ZDispatchBind *self)
 }
 
 /**
- * z_dispatch_chain_lock:
- * @self this
+ * Lock the chain's mutex.
  *
- * Lock the chain's mutex
+ * @param self this
  */
 static inline void
 z_dispatch_chain_lock(ZDispatchChain *self)
 {
-  g_static_rec_mutex_lock(&self->lock);
+  g_rec_mutex_lock(&self->lock);
 }
 
 /**
- * z_dispatch_chain_unlock:
- * @self this
+ * Unlock the chain's mutex.
  *
- * Unlock the chain's mutex
+ * @param self this
  */
 static inline void
 z_dispatch_chain_unlock(ZDispatchChain *self)
 {
-  g_static_rec_mutex_unlock(&self->lock);
+  g_rec_mutex_unlock(&self->lock);
 }
 
 static inline ZDispatchChain *z_dispatch_chain_ref(ZDispatchChain *self);
 static inline void z_dispatch_chain_unref(ZDispatchChain *self);
 
 /**
- * z_dispatch_chain_thread:
- * @st this
+ * Thread function of dispatcher chain.
  *
- * The thread routine of a dispatcher chain, pops new connections from the
- * accept_queue and processes them by calling z_dispatch_connection.
- * When the popped connection is the special value Z_DISPATCH_THREAD_EXIT_MAGIC,
- * exits the processing loop and finishes the thread.
+ * @param st this
  *
- * Returns: NULL
+ * Pops new connections from the accept_queue and processes them by
+ * calling z_dispatch_connection.  When the popped connection is the
+ * special value Z_DISPATCH_THREAD_EXIT_MAGIC, exits the processing
+ * loop and finishes the thread.
+ *
+ * @return NULL
  */
 static gpointer
 z_dispatch_chain_thread(gpointer st)
@@ -457,7 +454,7 @@ z_dispatch_chain_thread(gpointer st)
 	  z_log(NULL, CORE_DEBUG, 4, "Accept queue stats; avg_length='%ld'", acceptq_sum / 1000);
           acceptq_sum = 0;
         }
-      conn = g_async_queue_pop(self->accept_queue);
+      conn = static_cast<ZConnection *>(g_async_queue_pop(self->accept_queue));
       if (conn == Z_DISPATCH_THREAD_EXIT_MAGIC)
         break;
       z_dispatch_connection(self, conn);
@@ -473,16 +470,16 @@ z_dispatch_chain_thread(gpointer st)
 }
 
 /**
- * z_dispatch_chain_new:
- * @protocol Protocol identifier (ZD_PROTO_*)
- * @bind_addr Address to bind to
- * @params Additional parameters (see ZDispatch*Params)
+ * Create a dispatcher chain.
+ *
+ * @param protocol Protocol identifier (ZD_PROTO_*)
+ * @param bind_addr Address to bind to
+ * @param params Additional parameters (see ZDispatch*Params)
  *
  * Constructor of ZDispatchChain, allocates and initialises a new instance, optionally
  * starts a processing thread for it.
  *
- * Returns:
- * The new instance
+ * @return the new instance
  */
 static ZDispatchChain *
 z_dispatch_chain_new(const gchar *session_id, ZDispatchBind *key, ZDispatchParams *params)
@@ -495,6 +492,7 @@ z_dispatch_chain_new(const gchar *session_id, ZDispatchBind *key, ZDispatchParam
   self->ref_cnt = 1;
   self->registered_key = z_dispatch_bind_ref(key);
   self->threaded = ((ZDispatchCommonParams *) params)->threaded;
+  g_rec_mutex_init(&self->lock);
 
   memcpy(&self->params, params, sizeof(*params));
   if (self->threaded)
@@ -522,10 +520,9 @@ z_dispatch_chain_new(const gchar *session_id, ZDispatchBind *key, ZDispatchParam
 }
 
 /**
- * z_dispatch_chain_ref:
- * @self this
- *
  * Increment the chain's reference counter.
+ *
+ * @param self this
  */
 static inline ZDispatchChain *
 z_dispatch_chain_ref(ZDispatchChain *self)
@@ -537,8 +534,8 @@ z_dispatch_chain_ref(ZDispatchChain *self)
 }
 
 /**
- * z_dispatch_chain_unref:
- * @self this
+ * Decrement the chain's reference counter.
+ * @param self this
  *
  * Decrement the chain's reference counter, destroy it when the counter
  * reaches zero.
@@ -565,10 +562,8 @@ z_dispatch_chain_unref(ZDispatchChain *self)
 }
 
 /**
- * z_dispatch_entry_free:
- * @entry this
- *
- * Destructor of ZDispatchEntry
+ * Destructor of ZDispatchEntry.
+ * @param entry this
  */
 static void
 z_dispatch_entry_free(ZDispatchEntry *entry)
@@ -581,17 +576,18 @@ z_dispatch_entry_free(ZDispatchEntry *entry)
 }
 
 /**
- * z_dispatch_entry_compare_prio:
- * @a 1st entry
- * @b 2nd entry
+ * Compare two dispatch entries by their priority.
+ *
+ * @param a 1st entry
+ * @param b 2nd entry
  *
  * Compares the two entries by their priority, used for ordered inserting
  * into the list by g_list_insert_sorted.
  *
- * Returns:
- * -1 if a is less prioritised than b
- *  0 if the priorities equals
- *  1 if a is more prioritised than b
+ * @return
+ * -1 if a is less prioritised than b,
+ *  0 if the priorities equals,
+ *  1 if a is more prioritised than b.
  */
 static gint
 z_dispatch_entry_compare_prio(ZDispatchEntry *a, ZDispatchEntry *b)
@@ -605,9 +601,10 @@ z_dispatch_entry_compare_prio(ZDispatchEntry *a, ZDispatchEntry *b)
 }
 
 /**
- * z_dispatch_connection:
- * @chain this
- * @conn The new connection to dispatch
+ * Dispatch a new connection.
+ *
+ * @param chain this
+ * @param conn The new connection to dispatch
  *
  * Iterates through the chain and dispatches the connection to the
  * chain items by passing it to their callbacks (for example to
@@ -650,11 +647,12 @@ z_dispatch_connection(ZDispatchChain *chain, ZConnection *conn)
 }
 
 /**
- * z_dispatch_accept:
- * @fdstream Socket stream
- * @client Address of remote endpoint
- * @dest Address of original destination
- * @user_data this
+ * Callback function called for each incoming connection.
+ *
+ * @param fdstream Socket stream
+ * @param client Address of remote endpoint
+ * @param dest Address of original destination
+ * @param user_data this
  *
  * Internal callback, called when a new incoming connection is established.
  * Creates and initialises a new ZConnection, and dispatches it to the chain
@@ -663,7 +661,7 @@ z_dispatch_connection(ZDispatchChain *chain, ZConnection *conn)
  *
  * Note: this function runs in the main thread.
  *
- * Returns: TRUE
+ * @return TRUE
  */
 static gboolean
 z_dispatch_accept(ZStream *fdstream, ZSockAddr *client, ZSockAddr *dest, gpointer user_data)
@@ -955,13 +953,12 @@ z_dispatch_bind_iface_group_change(guint32 group, ZIfChangeType change, const gc
 
 /**
  * z_dispatch_bind_listener:
- * @session_id Session identifier
- * @chain this
+ * @param session_id Session identifier
+ * @param chain this
  *
  * Starts listening/receiving for a chain.
  *
- * Returns:
- * TRUE on success
+ * @return TRUE on success
  */
 static gboolean
 z_dispatch_bind_listener(ZDispatchChain *chain, ZDispatchBind **bound_key)
@@ -1036,12 +1033,11 @@ z_dispatch_bind_listener(ZDispatchChain *chain, ZDispatchBind **bound_key)
 }
 
 /**
- * z_dispatch_unbind_listener:
- * @chain this
+ * Stops listening/receiving for a chain.
+ * @param chain this
  *
- * Stops listening/receiving for a chain. If the chain was using a processing\
- * thread, notifies it by sending the special connection value Z_DISPATCH_THREAD_EXIT_MAGIC
- * to it.
+ * If the chain was using a processing thread, notifies it by sending
+ * the special connection value Z_DISPATCH_THREAD_EXIT_MAGIC to it.
  */
 static void
 z_dispatch_unbind_listener(ZDispatchChain *chain)
@@ -1075,23 +1071,22 @@ z_dispatch_unbind_listener(ZDispatchChain *chain)
 }
 
 /**
- * z_dispatch_register:
- * @session_id Session identifier
- * @key: ZDispatchBind instance
- * @bound_addr The address actually bound to
- * @prio Priority level
- * @params Additional parameters, see ZDispatch*Params
- * @cb Callback to call when a connection is established
- * @user_data this
- * @data_destroy Pointer to the destructor
+ * Construct a ZDispatchEntry object.
  *
- * Constructor for ZDispatchEntry. Creates and initialises a new chain item
- * instance, looks for a chain that is bound to the requested address, creates
- * a new one if no such chain found, inserts it into the chain ordered by
- * priority.
+ * @param session_id Session identifier
+ * @param key ZDispatchBind instance
+ * @param bound_addr The address actually bound to
+ * @param prio Priority level
+ * @param params Additional parameters, see ZDispatch*Params
+ * @param cb Callback to call when a connection is established
+ * @param user_data this
+ * @param data_destroy Pointer to the destructor
  *
- * Returns:
- * The new instance
+ * Creates and initialises a new chain item instance, looks for a
+ * chain that is bound to the requested address, creates a new one if
+ * no such chain found, inserts it into the chain ordered by priority.
+ *
+ * @return The new instance
  */
 ZDispatchEntry *
 z_dispatch_register(gchar *session_id,
@@ -1112,7 +1107,7 @@ z_dispatch_register(gchar *session_id,
   if (z_dispatch_bind_is_wildcard(key))
     chain = NULL;
   else
-    chain = g_hash_table_lookup(dispatch_table, key);
+    chain = static_cast<ZDispatchChain *>(g_hash_table_lookup(dispatch_table, key));
 
   if (!chain)
     {
@@ -1175,11 +1170,11 @@ z_dispatch_register(gchar *session_id,
 }
 
 /**
- * z_dispatch_unregister:
- * @entry this
+ * Destructor of ZDispatchEntry.
+ * @param entry this
  *
- * Destructor of ZDispatchEntry. Removes the entry from its chain,
- * destroying the chain if this was the last entry in it.
+ * Removes the entry from its chain, destroying the chain if this was
+ * the last entry in it.
  */
 void
 z_dispatch_unregister(ZDispatchEntry *entry)
@@ -1251,8 +1246,6 @@ z_dispatch_unregister(ZDispatchEntry *entry)
 /* module initialization */
 
 /**
- * z_dispatch_init:
- *
  * Initialises the global hash table of chains.
  */
 void
@@ -1262,10 +1255,9 @@ z_dispatch_init(void)
 }
 
 /**
- * z_dispatch_destroy:
- *
  * Destroys the global hash table of chains.
- * FIXME?: what happens if there are still chains in the table?
+ *
+ * FIXME: what happens if there are still chains in the table?
  */
 void
 z_dispatch_destroy(void)

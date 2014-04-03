@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -34,15 +33,17 @@
 #include <gmodule.h>
 
 #define G_MODULE_ERROR_SAFE() (g_module_error() ? g_module_error() : "(null)")
+#define ZORP_MODULE_INIT_NAME "_Z16zorp_module_initv"
 
 /**
- * z_load_module:
- * @modname: name of the module to load
+ * Load a Zorp module.
  *
- * This function opens the module specified by @modname as a shared object
+ * @param modname name of the module to load
+ *
+ * This function opens the module specified by modname as a shared object
  * and initializes it by calling its zorp_module_init function.
  *
- * Returns TRUE on success
+ * @return TRUE on success
  **/
 gint
 z_load_module(gchar *modname)
@@ -53,9 +54,9 @@ z_load_module(gchar *modname)
 
   z_enter();
   buf = g_module_build_path(ZORP_LIBDIR, modname);
-  m = g_module_open(buf, 0);
+  m = g_module_open(buf, static_cast<GModuleFlags>(0));
   if (m &&
-      g_module_symbol(m, "zorp_module_init", (gpointer *) &modinit) &&
+      g_module_symbol(m, ZORP_MODULE_INIT_NAME, (gpointer *) &modinit) &&
       modinit())
     {
       /*LOG

@@ -1,6 +1,7 @@
-#include "../http.h"
+#define BOOST_TEST_MAIN
+#include <boost/test/unit_test.hpp>
 
-#define BOOL_STR(x) ((x) ? "TRUE" : "FALSE")
+#include "../http.h"
 
 #define TEST_STR(field) \
   do 											\
@@ -15,7 +16,7 @@
     }											\
   while (0)
 
-gboolean
+void
 test_case(gint id, gchar *url_str, gboolean unicode, gboolean invalid_escape, gboolean expected_valid, gchar *scheme, gchar *user, gchar *passwd, gchar *host, guint port, gchar *file, gchar *query, gchar *fragment)
 {
   HttpURL url;
@@ -47,17 +48,7 @@ test_case(gint id, gchar *url_str, gboolean unicode, gboolean invalid_escape, gb
       TEST_STR(fragment);
     }
 
-  if (ok)
-    {
-      printf("test success, id=%d, url=%s\n", id, url_str);
-      return TRUE;
-    }
-  else
-    {
-      printf("test failure, id=%d, url=%s, reason=%s\n", id, url_str, fail_reason);
-      g_free(fail_reason);
-      return FALSE;
-    }
+  BOOST_CHECK_MESSAGE(ok, "test failure, id=" << id << ", url=" << url_str << ", reason=" << fail_reason);
 }
 
 struct
@@ -137,43 +128,15 @@ struct
   { NULL, 0, 0, 0, NA }
 };
 
-int
-main(int argc, char *argv[])
+BOOST_AUTO_TEST_CASE(test_parse_url)
 {
-  gint i, testcase_id = -1;
-  gint fail_count = 0, success_count = 0;
+  gint i;
 
-  if (argc == 2)
-    testcase_id = atoi(argv[1]);
-
-  if (testcase_id == -1)
+  for (i = 0; test_table[i].url_str; i++)
     {
-      for (i = 0; test_table[i].url_str; i++)
-        {
-          if (test_case(i, test_table[i].url_str, test_table[i].unicode, test_table[i].invalid_escape, test_table[i].valid,
-                        test_table[i].scheme, test_table[i].user,  test_table[i].passwd,
-                        test_table[i].host, test_table[i].port,  test_table[i].file,
-                        test_table[i].query, test_table[i].fragment))
-            {
-              success_count++;
-            }
-          else
-            {
-              fail_count++;
-            }
-        }
-
-      printf("Report: %d success, %d failed\n", success_count, fail_count);
-    }
-  else
-    {
-      i = testcase_id;
       test_case(i, test_table[i].url_str, test_table[i].unicode, test_table[i].invalid_escape, test_table[i].valid,
-                          test_table[i].scheme, test_table[i].user,  test_table[i].passwd,
-                          test_table[i].host, test_table[i].port,  test_table[i].file,
-                          test_table[i].query, test_table[i].fragment);
+                    test_table[i].scheme, test_table[i].user,  test_table[i].passwd,
+                    test_table[i].host, test_table[i].port,  test_table[i].file,
+                    test_table[i].query, test_table[i].fragment);
     }
-
-  return !(fail_count == 0);
-
 }

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Hidden
  *
@@ -37,7 +36,6 @@
 #include <stdlib.h>
 
 #include "telnet.h"
-#include "telnetpatternmatch.h"
 
 #define TELNET_POLICY   "telnet.policy"
 #define TELNET_DEBUG    "telnet.debug"
@@ -98,7 +96,7 @@ telnet_policy_option(TelnetProxy *self, ZEndpoint ep G_GNUC_UNUSED, guint8 comma
 
   g_snprintf(lookup_str, sizeof(lookup_str), "%d", option);
   keys[0] = lookup_str;
-  tmp = z_dim_hash_table_search(self->telnet_policy, 1, keys);
+  tmp = static_cast<ZPolicyObj *>(z_dim_hash_table_search(self->telnet_policy, 1, keys));
   if (!tmp)
     {
       z_proxy_log(self, TELNET_POLICY, 2, "Option not found in policy; option='%s'", lookup_str);
@@ -204,7 +202,7 @@ telnet_policy_option(TelnetProxy *self, ZEndpoint ep G_GNUC_UNUSED, guint8 comma
  *
  */
 ZVerdict
-telnet_policy_suboption(TelnetProxy *self, ZEndpoint ep G_GNUC_UNUSED, guint8 option, guint8 subcommand, gchar *name, gchar *value)
+telnet_policy_suboption(TelnetProxy *self, ZEndpoint ep G_GNUC_UNUSED, guint8 option, guint8 subcommand, const gchar *name, const gchar *value)
 {
   ZVerdict      res;
   ZPolicyObj    *pol_res;
@@ -224,7 +222,7 @@ telnet_policy_suboption(TelnetProxy *self, ZEndpoint ep G_GNUC_UNUSED, guint8 op
   keys[0] = lookup_str[0];
   keys[1] = lookup_str[1];
 
-  tmp = z_dim_hash_table_search(self->telnet_policy, 2, keys);
+  tmp = static_cast<ZPolicyObj *>(z_dim_hash_table_search(self->telnet_policy, 2, keys));
   if (!tmp)
     {
       z_proxy_log(self, TELNET_POLICY, 1, "Option not found in policy hash, dropping; command=`%s', option=`%s'", lookup_str[1], lookup_str[0]);

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Hidden
  *
@@ -60,7 +59,7 @@ update_suboption_value_in_buffer_from_str(ZPktBuf *buf, const GString *value)
   /* keep only the option and the subcommand byte in buffer */
   z_pktbuf_resize(buf, 2);
   /* replace the rest with the string contents */
-  z_pktbuf_put_u8s(buf, value->len, value->str);
+  z_pktbuf_put_u8s(buf, value->len, reinterpret_cast<guchar *>(value->str));
 }
 
 static inline void
@@ -69,7 +68,7 @@ update_suboption_value_in_buffer(ZPktBuf *buf, ZPktBuf *value)
   /* keep only the option and the subcommand byte in buffer */
   z_pktbuf_resize(buf, 2);
   /* replace the rest with the string contents */
-  z_pktbuf_put_u8s(buf, z_pktbuf_length(value), z_pktbuf_data(value));
+  z_pktbuf_put_u8s(buf, z_pktbuf_length(value), static_cast<unsigned char *>(z_pktbuf_data(value)));
 }
 
 static inline void
@@ -78,7 +77,7 @@ set_string_from_buffer_contents(GString *string, ZPktBuf *buf)
   gsize len = z_pktbuf_available(buf);
 
   g_string_truncate(string, len);
-  g_string_overwrite_len(string, 0, z_pktbuf_current(buf), len);
+  g_string_overwrite_len(string, 0, reinterpret_cast<gchar *>(z_pktbuf_current(buf)), len);
 }
 
 static inline gboolean
@@ -149,8 +148,7 @@ telnet_subopt_terminal_type(TelnetProxy *self, ZEndpoint ep, guint8 option, ZPkt
           z_proxy_return(self, ZV_DROP);
         }
 
-      gsize terminal_type_length = z_pktbuf_available(suboption_buffer);
-      if (terminal_type_length > TELNET_TERMINAL_TYPE_MAX_LENGTH)
+      if (z_pktbuf_available(suboption_buffer) > TELNET_TERMINAL_TYPE_MAX_LENGTH)
         {
           z_proxy_log(self, TELNET_VIOLATION, 3, "Invalid TERMINAL TYPE value, it is too long;");
           z_proxy_return(self, ZV_DROP);
@@ -252,8 +250,7 @@ telnet_subopt_terminal_speed(TelnetProxy *self, ZEndpoint ep, guint8 option, ZPk
           z_proxy_return(self, ZV_DROP);
         }
 
-      gsize terminal_speed_length = z_pktbuf_available(suboption_buffer);
-      if (terminal_speed_length > TELNET_TERMINAL_SPEED_MAX_LENGTH)
+      if (z_pktbuf_available(suboption_buffer) > TELNET_TERMINAL_SPEED_MAX_LENGTH)
         {
           z_proxy_log(self, TELNET_VIOLATION, 3, "TERMINAL SPEED IS option, value too long");
           z_proxy_return(self, ZV_DROP);
@@ -352,8 +349,7 @@ telnet_subopt_x_display(TelnetProxy *self, ZEndpoint ep, guint8 option, ZPktBuf 
           z_proxy_return(self, ZV_DROP);
         }
 
-      gsize value_length = z_pktbuf_available(suboption_buffer);
-      if (value_length >= TELNET_X_DISPLAY_LOCATION_MAX_LENGTH)
+      if (z_pktbuf_available(suboption_buffer) >= TELNET_X_DISPLAY_LOCATION_MAX_LENGTH)
         {
           z_proxy_log(self, TELNET_VIOLATION, 3, "X DISPLAY LOCATION IS option, value too long;");
           z_proxy_return(self, ZV_DROP);
@@ -412,6 +408,35 @@ parse_environment_name_or_value(GString *string, ZPktBuf *buf)
     }
 }
 
+static ZVerdict
+filter_user_variable(TelnetProxy *self)
+{
+  ZVerdict res;
+  if (!telnet_state_is_connected(self))
+    {
+      if (!telnet_policy_parse_authinfo(self, "USER", self->policy_value))
+        {
+          z_proxy_log(self, TELNET_REQUEST, 1, "Invalid USER value for inband routing or gateway authentication, aborting session;");
+          res = ZV_ABORT;
+        }
+      else
+        {
+          z_proxy_log(self, TELNET_DEBUG, 6, "USER environment variable successfully parsed;");
+          res = ZV_ACCEPT;
+        }
+    }
+  else
+    {
+      /* if any part of the USER variable might have been used
+       * make sure the USER variable only contains the user name to be used on the server */
+      if (self->server_hostname_is_from_env || self->gateway_user_is_from_env)
+        g_string_assign_len(self->policy_value, self->username->str, self->username->len);
+
+      res = ZV_ACCEPT;
+    }
+
+  return res;
+}
 
 static ZVerdict
 filter_special_variable(TelnetProxy *self)
@@ -437,37 +462,16 @@ filter_special_variable(TelnetProxy *self)
     }
   else if (strcmp(self->policy_name->str, "USER") == 0)
     {
-      if (!telnet_state_is_connected(self))
-        {
-          if (!telnet_policy_parse_authinfo(self, "USER", self->policy_value))
-            {
-              z_proxy_log(self, TELNET_REQUEST, 1, "Invalid USER value for inband routing or gateway authentication, aborting session;");
-              res = ZV_ABORT;
-            }
-          else
-            {
-              z_proxy_log(self, TELNET_DEBUG, 6, "USER environment variable successfully parsed;");
-              res = ZV_ACCEPT;
-            }
-        }
-      else
-        {
-          /* if any part of the USER variable might have been used
-           * make sure the USER variable only contains the user name to be used on the server */
-          if (self->server_hostname_is_from_env || self->gw_username_is_from_env)
-            g_string_assign_len(self->policy_value, self->server_username->str, self->server_username->len);
-
-          res = ZV_ACCEPT;
-        }
+      res = filter_user_variable(self);
     }
   else if (strcmp(self->policy_name->str, "GW_USER") == 0 &&
            self->gw_auth_required)
     {
       if (!telnet_state_is_connected(self) &&
-          self->gw_username->len == 0)
+          self->gateway_user->len == 0)
         {
-          g_string_assign(self->gw_username, self->policy_value->str);
-          self->gw_username_is_from_env = TRUE;
+          g_string_assign(self->gateway_user, self->policy_value->str);
+          self->gateway_user_is_from_env = TRUE;
 
           z_proxy_log(self, TELNET_DEBUG, 7, "Telnet suboption negotiation GW_USER variable; value='%s'",
                       self->policy_value->str);
@@ -480,10 +484,10 @@ filter_special_variable(TelnetProxy *self)
            self->gw_auth_required)
     {
       if (!telnet_state_is_connected(self) &&
-          self->gw_password->len == 0)
+          self->gateway_password->len == 0)
         {
-          g_string_assign(self->gw_password, self->policy_value->str);
-          self->gw_password_is_from_env = TRUE;
+          g_string_assign(self->gateway_password, self->policy_value->str);
+          self->gateway_password_is_from_env = TRUE;
 
           z_proxy_log(self, TELNET_DEBUG, 7, "Telnet suboption negotiation GW_PASS variable, value='%s'",
                       self->policy_value->str);
@@ -530,12 +534,13 @@ check_and_copy_environment_name_value_pair(TelnetProxy *self, ZEndpoint ep, guin
   z_proxy_log(self, TELNET_DEBUG, 6, "Evaluating NEW-ENVIRON environment variable; type='%hhu', name='%s', value='%s'",
               type, self->policy_name->str, self->policy_value->str);
 
-  if (!telnet_proxy_is_transparent(self) &&
-      /* self->policy_value->len > 0 &&  the variable actually has a value */
-      subcommand == TELNET_SB_ENVIRONMENT_IS &&
+  if (subcommand == TELNET_SB_ENVIRONMENT_IS &&
       (type == TELNET_OPTARG_ENVIRONMENT_VAR || type == TELNET_OPTARG_ENVIRONMENT_USERVAR))
     {
-      res = filter_special_variable(self);
+      if (!telnet_proxy_is_transparent(self))
+        {
+          res = filter_special_variable(self);
+        }
     }
 
   if (res == ZV_ACCEPT)
@@ -546,12 +551,12 @@ check_and_copy_environment_name_value_pair(TelnetProxy *self, ZEndpoint ep, guin
     case ZV_ACCEPT:
       /* copy both name and value (if a value was present or it is non-empty after policy evaluation) */
       z_pktbuf_put_u8(filtered, type);
-      z_pktbuf_put_u8s(filtered, self->policy_name->len, self->policy_name->str);
+      z_pktbuf_put_u8s(filtered, self->policy_name->len, reinterpret_cast<guchar *>(self->policy_name->str));
 
       if (value_present || self->policy_value->len > 0)
         {
           z_pktbuf_put_u8(filtered, TELNET_OPTARG_ENVIRONMENT_VALUE);
-          z_pktbuf_put_u8s(filtered, self->policy_value->len, self->policy_value->str);
+          z_pktbuf_put_u8s(filtered, self->policy_value->len, reinterpret_cast<guchar *>(self->policy_value->str));
         }
       break;
 
@@ -559,7 +564,7 @@ check_and_copy_environment_name_value_pair(TelnetProxy *self, ZEndpoint ep, guin
       /* REJECT means only the name gets copied without an associated VALUE.
        * According to RFC 1572 this means that the variable is not defined. */
       z_pktbuf_put_u8(filtered, type);
-      z_pktbuf_put_u8s(filtered, self->policy_name->len, self->policy_name->str);
+      z_pktbuf_put_u8s(filtered, self->policy_name->len, reinterpret_cast<guchar *>(self->policy_name->str));
       break;
 
     default:

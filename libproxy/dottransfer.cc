@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -287,7 +286,7 @@ z_dot_transfer_dst_shutdown(ZTransfer2 *s, ZStream *stream, GError **err)
 
 /**
  * z_dot_transfer_new:
- * @class: class to instantiate
+ * @class_: class to instantiate
  * @owner: owner proxy
  * @poll: ZPoll instance
  * @client: client stream
@@ -302,7 +301,7 @@ z_dot_transfer_dst_shutdown(ZTransfer2 *s, ZStream *stream, GError **err)
  * SMTP does not use this one, as it needs to send NOOPs to the server while transferring.
  **/
 ZDotTransfer *
-z_dot_transfer_new(ZClass *class,
+z_dot_transfer_new(ZClass *class_,
                    ZProxy *owner,
                    ZPoll *poll,
                    ZStream *client, ZStream *server,
@@ -315,7 +314,7 @@ z_dot_transfer_new(ZClass *class,
 
   z_proxy_enter(owner);
 
-  self = Z_CAST(z_transfer2_new(class,
+  self = Z_CAST(z_transfer2_new(class_,
                                owner, poll,
                                client, server,
                                buffer_size,

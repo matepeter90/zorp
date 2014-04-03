@@ -410,13 +410,13 @@ z_ifmon_unregister_group_watch(ZIfmonGroupWatch *watch)
  * @param[out] if_flags interface flags
  * @param[out] if_group interface group, only set if the message contains it, otherwise 0
  *
- * @note We assume no interface can have a group of 0 so we use that to signal that it has no group. The reason for this assumption is:
+ * \note We assume no interface can have a group of 0 so we use that to signal that it has no group. The reason for this assumption is:
  * <pre>
  * # ip link set ipsec3 group 0
  * Error: argument "0" is wrong: "group" value is invalid
  * </pre>
  *
- * @returns TRUE on success
+ * @return TRUE on success
  **/
 static inline gboolean
 z_ifmon_parse_ifinfo(const gchar *msg, gsize msg_len, guint *if_index, const gchar **if_name, guint16 *if_flags, guint32 *if_group)
@@ -431,7 +431,7 @@ z_ifmon_parse_ifinfo(const gchar *msg, gsize msg_len, guint *if_index, const gch
     return FALSE;
 
   /* ifinfo header */
-  ifi = NLMSG_DATA(h);
+  ifi = static_cast<ifinfomsg *>(NLMSG_DATA(h));
   *if_index = ifi->ifi_index;
   *if_flags = ifi->ifi_flags;
 
@@ -478,7 +478,7 @@ z_ifmon_parse_ifaddr(const gchar *msg, gsize msg_len, guint *ifa_index, guint *i
     return FALSE;
 
   /* ifaddr header */
-  ifa = NLMSG_DATA(h);
+  ifa = static_cast<ifaddrmsg *>(NLMSG_DATA(h));
   *ifa_index = ifa->ifa_index;
   *ifa_family = ifa->ifa_family;
 
@@ -513,7 +513,7 @@ z_ifmon_add_iface(const gchar *msg, gsize msg_len)
   guint32 if_index;
   guint16 if_flags;
   guint32 if_group;
-  gboolean new = FALSE;
+  gboolean new_ = FALSE;
   ZIfaceInfo *info;
   gboolean old_iface_changed, new_iface_changed;
 
@@ -525,13 +525,13 @@ z_ifmon_add_iface(const gchar *msg, gsize msg_len)
    * This means the group check below won't call group watchers if there's no group.
    **/
 
-  info = g_hash_table_lookup(iface_hash, &if_index);
+  info = static_cast<ZIfaceInfo *>(g_hash_table_lookup(iface_hash, &if_index));
   if (!info)
     {
       info = g_new0(ZIfaceInfo, 1);
       info->index = if_index;
       g_hash_table_insert(iface_hash, &info->index, info);
-      new = TRUE;
+      new_ = TRUE;
     }
 
   /* interface is changed if:
@@ -541,9 +541,9 @@ z_ifmon_add_iface(const gchar *msg, gsize msg_len)
    */
 
   /* interface was renamed, old_iface refers to the old name */
-  old_iface_changed = !new && if_name && strcmp(info->name, if_name) != 0;
+  old_iface_changed = !new_ && if_name && strcmp(info->name, if_name) != 0;
   /* interface with the new/current name was changed */
-  new_iface_changed = new || ((info->flags & IFF_UP) != (guint32) (if_flags & IFF_UP)) || old_iface_changed;
+  new_iface_changed = new_ || ((info->flags & IFF_UP) != (guint32) (if_flags & IFF_UP)) || old_iface_changed;
 
   /* send notification */
   if (old_iface_changed)
@@ -563,7 +563,7 @@ z_ifmon_add_iface(const gchar *msg, gsize msg_len)
 
   if (new_iface_changed)
     {
-      if (new)
+      if (new_)
         {
           /* new interface, immediately in UP state, is it possible at all? */
           if (info->flags & IFF_UP)
@@ -596,7 +596,7 @@ z_ifmon_add_iface(const gchar *msg, gsize msg_len)
       z_ifmon_call_group_watchers(info->group, Z_IFC_ADD, info->name);
     }
 
-  if (new)
+  if (new_)
     {
       z_rtnetlink_request_dump(RTM_GETADDR, PF_PACKET);
       z_log(NULL, CORE_INFO, 4, "Interface added; if_index='%d', if_name='%s', if_flags='%d'", if_index, if_name ? if_name : "unknown", if_flags);
@@ -619,7 +619,7 @@ z_ifmon_del_iface(const gchar *msg, gsize msg_len)
   if (!z_ifmon_parse_ifinfo(msg, msg_len, &if_index, &if_name, &if_flags, &if_group))
     return;
 
-  info = g_hash_table_lookup(iface_hash, &if_index);
+  info = static_cast<ZIfaceInfo *>(g_hash_table_lookup(iface_hash, &if_index));
   if (!info)
     {
       z_log(NULL, CORE_ERROR, 1, "Interface removal message received, but no such interface known; if_index='%d', if_name='%s'", if_index, if_name ? if_name : "unknown");
@@ -651,7 +651,7 @@ z_ifmon_change_iface_addr(const gchar *msg, gsize msg_len)
   if (ifa_family != AF_INET)
     return;
 
-  info = g_hash_table_lookup(iface_hash, &ifa_index);
+  info = static_cast<ZIfaceInfo *>(g_hash_table_lookup(iface_hash, &ifa_index));
   if (!info)
     {
       z_log(NULL, CORE_INFO, 4, "Interface address message received, but no such interface known; if_index='%d'", ifa_index);
@@ -720,7 +720,7 @@ z_ifmon_get_primary_address_by_name(const gchar *iface, gint family)
 const void *
 z_ifmon_get_primary_address(guint ifindex, gint family)
 {
-  return z_ifmon_get_primary_address_impl(g_hash_table_lookup(iface_hash, &ifindex), family);
+  return z_ifmon_get_primary_address_impl(static_cast<const ZIfaceInfo *>(g_hash_table_lookup(iface_hash, &ifindex)), family);
 
 }
 
@@ -740,7 +740,7 @@ z_ifmon_get_ifindex(const gchar *iface, guint *if_index)
 guint
 z_ifmon_get_iface_flags(guint ifindex)
 {
-  ZIfaceInfo *info = g_hash_table_lookup(iface_hash, &ifindex);
+  ZIfaceInfo *info = static_cast<ZIfaceInfo *>(g_hash_table_lookup(iface_hash, &ifindex));
 
   return info ? info->flags : 0;
 }

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor : kisza
@@ -37,7 +36,6 @@
 #include <zorp/pystream.h>
 #include <zorp/log.h>
 #include <zorp/szig.h>
-#include <zorp/notification.h>
 
 /*
   ZorpProxy is the Python interface to ZProxy.
@@ -54,13 +52,10 @@ struct _ZPolicyProxy
 };
 
 /**
- * z_policy_proxy_get_proxy:
- * @obj this
+ * Get the C proxy implementation connected to @p obj
  *
- * Get the embedded proxy.
- *
- * Returns:
- * The embedded proxy
+ * @param obj  policy proxy instance
+ * @return pointer to the C implementation connected to the policy proxy instance
  */
 ZProxy *
 z_policy_proxy_get_proxy(PyObject *obj)
@@ -69,21 +64,32 @@ z_policy_proxy_get_proxy(PyObject *obj)
 }
 
 /**
- * z_policy_proxy_bind:
- * @self this
- * @args Python args: module_name, session_id, client, parent
+ * Connect a proxy C implementation to the policy proxy instance
  *
- * Constructor of ZPolicyProxy. Class is an abstract one, so the instance
- * already exists, only initialisation has to be done.
+ * @param s  the policy proxy instance
+ * @param proxy  the C proxy implementation
  *
- * Searches the registry for module_name, and creates its (C-side) self->proxy
- * using the returned constructor. For details see documentation about the
- * instantiation and invocation of custom proxies.
- *
- * Returns:
- * NULL on error, PyNone on success.
+ * Set the backpointer in the policy proxy instance to the C implementation.
  */
-gboolean
+void
+z_policy_proxy_set_proxy(PyObject *s, ZProxy *proxy)
+{
+  ZPolicyProxy *self = (ZPolicyProxy *) s;
+
+  self->proxy = proxy;
+}
+
+/**
+ * Create an instance of the proxy C implementation of the proper type, and bind it to the policy proxy instance.
+ *
+ * @param s  the policy proxy instance
+ * @return  TRUE on success, FALSE on error
+ *
+ * Search the registry for the proper proxy module, load and initialize it if needed,
+ * then create the (C-side) self->proxy using the returned constructor.
+ * For details see documentation about the instantiation and invocation of custom proxies.
+ */
+ZPolicyProxyBindImplementationResult
 z_policy_proxy_bind_implementation(PyObject *s)
 {
   ZPolicyProxy *self = (ZPolicyProxy *) s;
@@ -97,7 +103,7 @@ z_policy_proxy_bind_implementation(PyObject *s)
   z_enter();
 
   if (self->proxy)
-    z_return(TRUE);
+    z_return(Z_POLICY_PROXY_BIND_IMPL_OK);
 
   module_name = PyString_AsString(self->module_name);
   proxy_name = PyString_AsString(self->proxy_name);
@@ -114,7 +120,7 @@ z_policy_proxy_bind_implementation(PyObject *s)
           z_log(NULL, CORE_ERROR, 1, "Cannot find proxy module; module='%s', proxy='%s, type='%d'",
                 module_name, proxy_name, proxy_type);
           z_leave();
-          return FALSE;
+          return Z_POLICY_PROXY_BIND_IMPL_FAILED;
         }
       proxy_module_funcs = (ZProxyModuleFuncs *) z_registry_get(proxy_name, &proxy_type);
       module_load_performed = TRUE;
@@ -128,7 +134,7 @@ z_policy_proxy_bind_implementation(PyObject *s)
        */
       z_log(NULL, CORE_ERROR, 1, "Cannot find proxy module; module='%s', proxy='%s, type='%d'", module_name, proxy_name, proxy_type);
       z_leave();
-      return FALSE;
+      return Z_POLICY_PROXY_BIND_IMPL_FAILED;
     }
 
   if (module_load_performed)
@@ -151,7 +157,7 @@ z_policy_proxy_bind_implementation(PyObject *s)
 
 
   z_leave();
-  return TRUE;
+  return Z_POLICY_PROXY_BIND_IMPL_OK;
 }
 
 void
@@ -256,12 +262,10 @@ z_policy_proxy_setattr(ZPolicyProxy *self, PyObject *name_obj, PyObject *value)
           if (PyErr_Occurred())
             {
               PyErr_Print();
-              return 1;
+              return -1;
             }
         }
     }
-  if (PyErr_Occurred())
-    PyErr_Print();
   return PyObject_GenericSetAttr((PyObject *) self, name_obj, value);
 }
 
@@ -343,52 +347,53 @@ static PyMethodDef z_policy_proxy_methods[] =
 PyTypeObject z_policy_proxy_type =
 {
   PyObject_HEAD_INIT(&PyType_Type)
-  .ob_size = 0,
-  .tp_name = "ZPolicyProxy",
-  .tp_basicsize = sizeof(ZPolicyProxy),
-  .tp_itemsize = 0,
-  .tp_dealloc = (destructor)z_policy_proxy_free,
-  .tp_print = NULL,
-  .tp_getattr = NULL,
-  .tp_setattr = NULL,
-  .tp_compare = NULL,
-  .tp_repr = NULL,
-  .tp_as_number = NULL,
-  .tp_as_sequence = NULL,
-  .tp_as_mapping = NULL,
-  .tp_hash = NULL,
-  .tp_call = NULL,
-  .tp_str = NULL,
-  .tp_getattro = (getattrofunc) z_policy_proxy_getattr,
-  .tp_setattro = (setattrofunc) z_policy_proxy_setattr,
-  .tp_as_buffer = NULL,
-  .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-  .tp_doc = "ZPolicyProxy class",
-  .tp_traverse = NULL,
-  .tp_clear = NULL,
-  .tp_richcompare = NULL,
-  .tp_weaklistoffset = 0,
-  .tp_iter = NULL,
-  .tp_iternext = NULL,
-  .tp_methods = z_policy_proxy_methods,
-  .tp_members = NULL,
-  .tp_getset = NULL,
-  .tp_base = NULL,
-  .tp_dict = NULL,
-  .tp_descr_get = NULL,
-  .tp_descr_set = NULL,
-  .tp_dictoffset = 0,
-  .tp_init = (initproc) z_policy_proxy_init_instance,
-  .tp_alloc = NULL,
-  .tp_new = PyType_GenericNew,
-  .tp_free = NULL,
-  .tp_is_gc = NULL,
-  .tp_bases = NULL,
-  .tp_mro = NULL,
-  .tp_cache = NULL,
-  .tp_subclasses = NULL,
-  .tp_weaklist = NULL,
-  .tp_del = NULL,
+  0,                                      /* ob_size */
+  "ZPolicyProxy",                         /* tp_name */
+  sizeof(ZPolicyProxy),                   /* tp_basicsize */
+  0,                                      /* tp_itemsize */
+  (destructor)z_policy_proxy_free,        /* tp_dealloc */
+  NULL,                                   /* tp_print */
+  NULL,                                   /* tp_getattr */
+  NULL,                                   /* tp_setattr */
+  NULL,                                   /* tp_compare */
+  NULL,                                   /* tp_repr */
+  NULL,                                   /* tp_as_number */
+  NULL,                                   /* tp_as_sequence */
+  NULL,                                   /* tp_as_mapping */
+  NULL,                                   /* tp_hash */
+  NULL,                                   /* tp_call */
+  NULL,                                   /* tp_str */
+  (getattrofunc) z_policy_proxy_getattr,  /* tp_getattro */
+  (setattrofunc) z_policy_proxy_setattr,  /* tp_setattro */
+  NULL,                                   /* tp_as_buffer */
+  Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+  "ZPolicyProxy class",                     /* tp_doc */
+  NULL,                                   /* tp_traverse */
+  NULL,                                   /* tp_clear */
+  NULL,                                   /* tp_reachcompare */
+  0,                                      /* tp_weaklistoffset */
+  NULL,                                   /* tp_iter */
+  NULL,                                   /* tp_iternext */
+  z_policy_proxy_methods,                 /* tp_methods */
+  NULL,                                   /* tp_members */
+  NULL,                                   /* tp_getset */
+  NULL,                                   /* tp_base */
+  NULL,                                   /* tp_dict */
+  NULL,                                   /* tp_descr_get */
+  NULL,                                   /* tp_descr_set */
+  0,                                      /* tp_dictoffset */
+  (initproc) z_policy_proxy_init_instance,/* tp_init */
+  NULL,                                   /* tp_alloc */
+  PyType_GenericNew,                      /* tp_new */
+  NULL,                                   /* tp_free */
+  NULL,                                   /* tp_is_gc */
+  NULL,                                   /* tp_bases */
+  NULL,                                   /* tp_mro */
+  NULL,                                   /* tp_cache */
+  NULL,                                   /* tp_subclasses */
+  NULL,                                   /* tp_weaklist */
+  NULL,                                   /* tp_del */
+  0,                                      /* tp_version_tag */
 };
 
 /*  to avoid type-punned pointer warning -- not static to avoid auto-inlining */

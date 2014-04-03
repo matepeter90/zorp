@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Balazs Scheidler <bazsi@balabit.hu>
  * Auditor:
@@ -31,8 +30,6 @@
  ***************************************************************************/
 
 #include "http.h"
-#include "http-audit-repository.h"
-#include "http-audit-stream.h"
 
 #include <zorp/thread.h>
 #include <zorp/registry.h>
@@ -47,7 +44,6 @@
 #include <zorp/random.h>
 #include <zorp/code.h>
 #include <zorp/code_base64.h>
-#include <zorp/bllookup.h>
 
 #include <zorp/proxy/errorloader.h>
 
@@ -58,7 +54,7 @@
 
 #include <netdb.h>
 static GHashTable *auth_hash = NULL;
-static GMutex *auth_mutex = NULL;
+G_LOCK_DEFINE_STATIC(auth_mutex);
 
 typedef struct _ZorpAuthInfo
 {
@@ -187,11 +183,14 @@ http_config_set_defaults(HttpProxy *self)
   self->error_info = g_string_sized_new(0);
   self->error_msg = g_string_sized_new(0);
   self->error_headers = g_string_sized_new(0);
-  self->error_code = -1;
+  self->error_code = HTTP_MSG_NOT_ASSIGNED;
   self->error_status = 500;
   self->error_files_directory = g_string_sized_new(0);
 
   self->error_silent = FALSE;
+
+  self->send_custom_response = FALSE;
+  self->custom_response_body = g_string_sized_new(0);
 
   self->max_auth_time = 0;
 
@@ -279,7 +278,7 @@ http_query_request_url(HttpProxy *self, gchar *name, gpointer value G_GNUC_UNUSE
  * We need to reparse the URL in these cases.
  **/
 static gint
-http_set_request_url(HttpProxy *self, gchar *name G_GNUC_UNUSED, gpointer value G_GNUC_UNUSED, PyObject *new)
+http_set_request_url(HttpProxy *self, gchar *name G_GNUC_UNUSED, gpointer value G_GNUC_UNUSED, PyObject *new_)
 {
   z_proxy_enter(self);
 
@@ -288,7 +287,7 @@ http_set_request_url(HttpProxy *self, gchar *name G_GNUC_UNUSED, gpointer value 
       gchar *str;
       const gchar *reason;
 
-      if (!PyArg_Parse(new, "s", &str))
+      if (!PyArg_Parse(new_, "s", &str))
         z_proxy_return(self, -1);
 
       if (!http_parse_url(&self->request_url_parts, self->permit_unicode_url,
@@ -296,7 +295,7 @@ http_set_request_url(HttpProxy *self, gchar *name G_GNUC_UNUSED, gpointer value 
         {
           z_proxy_log(self, HTTP_ERROR, 2, "Policy tried to force an invalid URL; url='%s', reason='%s'", str, reason);
           z_policy_raise_exception_obj(z_policy_exc_value_error, "Invalid URL.");
-          z_proxy_return(self, 0);
+          z_proxy_return(self, -1);
         }
 
       if (!http_format_url(&self->request_url_parts, self->request_url, TRUE, self->permit_unicode_url, TRUE, &reason))
@@ -737,6 +736,10 @@ http_register_vars(HttpProxy *self)
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET,
                   self->error_headers);
 
+  z_proxy_var_new(&self->super, "custom_response_body",
+                  Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET,
+                  self->custom_response_body);
+
   z_proxy_var_new(&self->super, "auth_forward",
                   Z_VAR_TYPE_INT | Z_VAR_GET | Z_VAR_SET | Z_VAR_GET_CONFIG | Z_VAR_SET_CONFIG,
                   &self->auth_forward);
@@ -844,7 +847,7 @@ http_register_vars(HttpProxy *self)
 static gboolean
 http_error_message(HttpProxy *self, gint response_code, guint message_code, GString *infomsg)
 {
-  gchar *messages[] =
+  const gchar *messages[] =
     {
       NULL,
       "clientsyntax.html",
@@ -936,6 +939,55 @@ http_error_message(HttpProxy *self, gint response_code, guint message_code, GStr
     }
 
   z_proxy_return(self, TRUE);
+}
+
+/**
+ * Send a locally generated response back to the client
+ *
+ * The response will be sent back as is, with the supplied status info and headers.
+ * The empty line between the headers and response body will be added automatically.
+ * Note that a Content-Length header should be included in the headers, depending on the
+ * request method and the status code, as described in rfc2616.
+ * A Connection: close header will be added automatically.
+ *
+ * @param self The proxy.
+ * @param status_code Status code to use in the status line.
+ * @param status_msg Status message to use in the status line.
+ * @param headers Flat string containing all the headers to send to the client.
+ * @param response_body Response body to send to the client. May be empty.
+ */
+static void
+http_send_custom_response(HttpProxy *self, guint status_code, GString *status_msg, GString *headers, GString *response_body)
+{
+  gchar status_line[256];
+  gsize response_body_length = response_body ? response_body->len : 0;
+  /* Preallocate some space for the response:
+   * status line + error headers + appended headers + empty line + response body
+   */
+  GString *http_response = g_string_sized_new(sizeof(status_line)
+                                              + headers->len +
+                                              + 32 + 2
+                                              + response_body_length);
+
+
+  g_snprintf(status_line, sizeof(status_line), "HTTP/1.0 %d %s\r\n",
+             status_code, status_msg->len > 0 ? status_msg->str : "Error encountered");
+
+  g_string_append(http_response, status_line);
+  g_string_append(http_response, headers->str);
+
+  g_string_append(http_response, "Connection: close\r\n");
+  g_string_append(http_response, "\r\n");
+
+  if (response_body_length > 0)
+    g_string_append(http_response, response_body->str);
+
+  z_log(NULL, HTTP_DEBUG, 6, "Sending custom response back to the client; length='%" G_GSIZE_FORMAT "'", http_response->len);
+
+  if (http_write(self, EP_CLIENT, http_response->str, http_response->len) != G_IO_STATUS_NORMAL)
+    z_log(NULL, HTTP_ERROR, 4, "Error sending custom response back to the client;");
+
+  g_string_free(http_response, TRUE);
 }
 
 /**
@@ -1149,14 +1201,14 @@ http_process_auth_info(HttpProxy *self, HttpHeader *h, ZorpAuthInfo *auth_info)
         {
           res = z_proxy_user_authenticated_default(&self->super, up[0], (gchar const **) groups);
           g_string_assign(self->old_auth_header, h->value->str);
-          g_mutex_lock(auth_mutex);
+          G_LOCK(auth_mutex);
 
           if (self->auth_cache_time > 0)
             {
               auth_info->last_auth_time = time(NULL);
             }
 
-          g_mutex_unlock(auth_mutex);
+          G_UNLOCK(auth_mutex);
         }
 
       g_strfreev(up);
@@ -1173,19 +1225,23 @@ http_process_auth_info(HttpProxy *self, HttpHeader *h, ZorpAuthInfo *auth_info)
 }
 
 static gboolean
-http_rewrite_host_header(HttpProxy *self, gchar *host, gint host_len, guint port)
+http_rewrite_host_header(HttpProxy *self, gchar *host, gint host_len, guint port, guint server_protocol)
 {
   HttpHeader *h;
+  guint rfc_port = 80;
 
   z_proxy_enter(self);
 
+  if (server_protocol == HTTP_PROTO_HTTPS)
+    rfc_port = 443;
+
   if (self->rewrite_host_header && http_lookup_header(&self->headers[EP_CLIENT], "Host", &h))
     {
-      /* NOTE: the constant 80 below is intentional, if
+      /* NOTE: the constant rfc_port below is intentional, if
        * default_port is changed we still have to send
        * correct host header (containing port number)
        */
-      if (port != 80 && port != 0)
+      if (port != rfc_port && port != 0)
         g_string_sprintf(h->value, "%.*s:%d", host_len, host, port);
       else
         g_string_sprintf(h->value, "%.*s", host_len, host);
@@ -1412,7 +1468,7 @@ http_get_client_info(HttpProxy *self, gchar *key, guint key_length)
 
   if (cookie_hash)
     {
-      our_value = g_hash_table_lookup(cookie_hash, "ZorpRealm");
+      our_value = static_cast<gchar *>(g_hash_table_lookup(cookie_hash, "ZorpRealm"));
 
       if (our_value)
         {
@@ -1640,7 +1696,7 @@ http_process_request(HttpProxy *self)
               z_inet_ntoa(client_key, sizeof(client_key), c_addr);
             }
 
-          g_mutex_lock(auth_mutex);
+          G_LOCK(auth_mutex);
 
           if (now > prev_cleanup + (2 * MAX(self->max_auth_time, self->auth_cache_time)))
             {
@@ -1649,7 +1705,7 @@ http_process_request(HttpProxy *self)
               prev_cleanup = now;
             }
 
-          auth_info = g_hash_table_lookup(auth_hash, client_key);
+          auth_info = static_cast<ZorpAuthInfo *>(g_hash_table_lookup(auth_hash, client_key));
 
           if (auth_info == NULL)
             {
@@ -1665,14 +1721,14 @@ http_process_request(HttpProxy *self)
                   auth_info->last_auth_time = now;
                 }
 
-              g_mutex_unlock(auth_mutex);
+              G_UNLOCK(auth_mutex);
             }
           else
             {
               /* authentication is required */
               g_string_truncate(self->auth_header_value, 0);
               h = NULL;
-              g_mutex_unlock(auth_mutex);
+              G_UNLOCK(auth_mutex);
 
               if (self->transparent_mode)
                 {
@@ -1680,12 +1736,12 @@ http_process_request(HttpProxy *self)
                       !http_lookup_header(&self->headers[EP_CLIENT], "Authorization", &h) ||
                       !http_process_auth_info(self, h, auth_info))
                     {
-                      g_mutex_lock(auth_mutex);
+                      G_LOCK(auth_mutex);
 
                       if (self->max_auth_time > 0)
                         auth_info->accept_credit = now + self->max_auth_time;
 
-                      g_mutex_unlock(auth_mutex);
+                      G_UNLOCK(auth_mutex);
                       self->error_code = HTTP_MSG_AUTH_REQUIRED;
                       self->error_status = 401;
                       g_string_sprintf(self->error_msg, "Authentication is required.");
@@ -1698,12 +1754,12 @@ http_process_request(HttpProxy *self)
                        !http_lookup_header(&self->headers[EP_CLIENT], "Proxy-Authorization", &h) ||
                        !http_process_auth_info(self, h, auth_info))
                 {
-                  g_mutex_lock(auth_mutex);
+                  G_LOCK(auth_mutex);
 
                   if (self->max_auth_time > 0)
                     auth_info->accept_credit = now + self->max_auth_time;
 
-                  g_mutex_unlock(auth_mutex);
+                  G_UNLOCK(auth_mutex);
                   self->error_code = HTTP_MSG_AUTH_REQUIRED;
                   self->error_status = 407;
                   g_string_sprintf(self->error_msg, "Authentication is required.");
@@ -1968,7 +2024,7 @@ http_process_filtered_request(HttpProxy *self)
     self->remote_port = http_get_default_port_for_protocol(self);
 
   if (!(self->request_flags & HTTP_REQ_FLG_CONNECT))
-    http_rewrite_host_header(self, self->request_url_parts.host->str, self->request_url_parts.host->len, self->remote_port);
+    http_rewrite_host_header(self, self->request_url_parts.host->str, self->request_url_parts.host->len, self->remote_port, self->server_protocol);
 
   if (http_parent_proxy_enabled(self))
     {
@@ -2086,10 +2142,10 @@ http_filter_request(HttpProxy *self)
   gint rc;
 
   z_proxy_enter(self);
-  f = g_hash_table_lookup(self->request_method_policy, self->request_method->str);
+  f = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->request_method_policy, self->request_method->str));
 
   if (!f)
-    f = g_hash_table_lookup(self->request_method_policy, "*");
+    f = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->request_method_policy, "*"));
 
   if (f)
     {
@@ -2194,12 +2250,21 @@ http_filter_request(HttpProxy *self)
           g_string_truncate(self->error_info, 0);
           break;
 
+        case HTTP_REQ_CUSTOM_RESPONSE:
+          /*LOG
+            This log message indicates that the policy requested a custom response to be sent to the client.
+          */
+          z_proxy_log(self, HTTP_POLICY, 6, "Policy requested to send custom response; req='%s'", self->request_method->str);
+          self->send_custom_response = TRUE;
+          z_proxy_return(self, TRUE);
+
         default:
           /*LOG
             This log message indicates that the specified HTTP request was not permitted by your policy.
           */
           z_proxy_log(self, HTTP_POLICY, 2, "Request not permitted by policy; req='%s'", self->request_method->str);
-          self->error_code = HTTP_MSG_POLICY_VIOLATION;
+          if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
+            self->error_code = HTTP_MSG_POLICY_VIOLATION;
           z_proxy_return(self, FALSE);
         }
 
@@ -2557,7 +2622,7 @@ http_process_response(HttpProxy *self)
        * connection close regardless what the client specified in its
        * connection header.
        */
-      gchar *conn_hdr_str = http_parent_proxy_enabled(self) ? "Proxy-Connection" : "Connection";
+      const gchar *conn_hdr_str = http_parent_proxy_enabled(self) ? "Proxy-Connection" : "Connection";
 
       /* we add an appriopriate connection header just as if we received one
        * (e.g. it might be rewritten later by
@@ -2627,7 +2692,7 @@ http_response_policy_get(HttpProxy *self)
   response_keys[0] = self->request_method->str;
   response_keys[1] = self->response;
 
-  return z_dim_hash_table_search(self->response_policy, 2, response_keys);
+  return static_cast<ZPolicyObj *>(z_dim_hash_table_search(self->response_policy, 2, response_keys));
 }
 
 static gboolean
@@ -3001,7 +3066,7 @@ http_main(ZProxy *s)
   /* loop for keep-alive */
   while (1)
     {
-      self->error_code = -1;
+      self->error_code = HTTP_MSG_NOT_ASSIGNED;
 
       /*LOG
         This message reports that Zorp is fetching the request and the
@@ -3012,7 +3077,7 @@ http_main(ZProxy *s)
       /* fetch request */
       if (!http_fetch_request(self))
         {
-          if (self->error_code == -1)
+          if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
             self->error_code = HTTP_MSG_CLIENT_SYNTAX;
 
           goto exit_request_loop;
@@ -3029,7 +3094,7 @@ http_main(ZProxy *s)
 
       if (!http_process_request(self))
         {
-          if (self->error_code == -1)
+          if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
             self->error_code = HTTP_MSG_CLIENT_SYNTAX;
 
           goto exit_request_loop;
@@ -3057,11 +3122,14 @@ http_main(ZProxy *s)
 
       if (!http_filter_request(self))
         {
-          if (self->error_code == -1)
+          if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
             self->error_code = HTTP_MSG_POLICY_SYNTAX;
 
           goto exit_request_loop;
         }
+
+      if (self->send_custom_response)
+        goto exit_request_loop;
 
       /*LOG
         This message indicates that Zorp is recechecking the HTTP request
@@ -3071,7 +3139,7 @@ http_main(ZProxy *s)
 
       if (!http_process_filtered_request(self))
         {
-          if (self->error_code == -1)
+          if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
             self->error_code = HTTP_MSG_CLIENT_SYNTAX;
 
           goto exit_request_loop;
@@ -3102,7 +3170,7 @@ http_main(ZProxy *s)
 
               if (!retry && !http_copy_request(self))
                 {
-                  if (self->error_code == -1)
+                  if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                     self->error_code = HTTP_MSG_CLIENT_SYNTAX;
 
                   retry = TRUE;
@@ -3116,7 +3184,7 @@ http_main(ZProxy *s)
 
               if (!retry && !http_fetch_response(self))
                 {
-                  if (self->error_code == -1)
+                  if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                     self->error_code = HTTP_MSG_SERVER_SYNTAX;
 
                   retry = TRUE;
@@ -3126,7 +3194,7 @@ http_main(ZProxy *s)
                 {
                   z_proxy_log(self, HTTP_ERROR, 3, "Server request failed, retrying; attempts='%d'", rerequest_attempts);
                   self->force_reconnect = TRUE;
-                  self->error_code = -1;
+                  self->error_code = HTTP_MSG_NOT_ASSIGNED;
                   rerequest_attempts--;
                   continue;
                 }
@@ -3151,7 +3219,7 @@ http_main(ZProxy *s)
 
           if (!http_process_response(self))
             {
-              if (self->error_code == -1)
+              if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                 self->error_code = HTTP_MSG_SERVER_SYNTAX;
 
               goto exit_request_loop;
@@ -3165,7 +3233,7 @@ http_main(ZProxy *s)
 
           if (!http_filter_response(self))
             {
-              if (self->error_code == -1)
+              if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                 self->error_code = HTTP_MSG_POLICY_SYNTAX;
 
               goto exit_request_loop;
@@ -3179,7 +3247,7 @@ http_main(ZProxy *s)
 
           if (!http_copy_response(self))
             {
-              if (self->error_code == -1)
+              if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                 self->error_code = HTTP_MSG_SERVER_SYNTAX;
 
               goto exit_request_loop;
@@ -3189,7 +3257,7 @@ http_main(ZProxy *s)
         {
           if (!http_handle_ftp_request(self))
             {
-              if (self->error_code == -1)
+              if (self->error_code == HTTP_MSG_NOT_ASSIGNED)
                 self->error_code = HTTP_MSG_FTP_ERROR;
             }
 
@@ -3237,7 +3305,14 @@ http_main(ZProxy *s)
   z_proxy_log(self, HTTP_DEBUG, 6, "exiting keep-alive loop;");
 
   if (self->error_code > 0)
-    http_error_message(self, self->error_status, self->error_code, self->error_info);
+    {
+      http_error_message(self, self->error_status, self->error_code, self->error_info);
+    }
+  else if (self->send_custom_response)
+    {
+      self->send_custom_response = FALSE;
+      http_send_custom_response(self, self->error_status, self->error_msg, self->error_headers, self->custom_response_body);
+    }
 
   /* in some cases the client might still have some data already queued to us,
    * fetch and ignore that data to avoid the RST sent in these cases
@@ -3335,9 +3410,15 @@ ZProxyFuncs http_proxy_funcs =
     {
       Z_FUNCS_COUNT(ZProxy),
       http_proxy_free,
-    },
-    .config = http_config,
-    .main = http_main,
+    },           /* super */
+    http_config, /*config */
+    NULL,        /* startup */
+    http_main,   /* main */
+    NULL,        /* shutdown */
+    NULL,        /* destroy */
+    NULL,        /* nonblocking_init */
+    NULL,        /* nonblocking_deinit */
+    NULL,        /* wakeup */
   };
 
 Z_CLASS_DEF(HttpProxy, ZProxy, http_proxy_funcs);
@@ -3346,7 +3427,7 @@ Z_CLASS_DEF(HttpProxy, ZProxy, http_proxy_funcs);
 
 static ZProxyModuleFuncs http_module_funcs =
   {
-    .create_proxy = http_proxy_new,
+    /* .create_proxy = */ http_proxy_new,
   };
 
 gint
@@ -3354,7 +3435,6 @@ zorp_module_init(void)
 {
   http_proto_init();
   auth_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-  auth_mutex = g_mutex_new();
   z_registry_add("http", ZR_PROXY, &http_module_funcs);
   return TRUE;
 }

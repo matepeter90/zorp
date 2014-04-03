@@ -46,9 +46,9 @@ make_socket (uint16_t port)
 int
 main(void)
 {
-  int sock, new;
+  int sock, new_;
   struct sockaddr_in6 clientname;
-  unsigned char buf[256];
+  char buf[256];
   socklen_t size;
 
   sock = make_socket(PORT);
@@ -62,8 +62,8 @@ main(void)
     }
 
   size = sizeof(clientname);
-  new = accept(sock, (struct sockaddr *) &clientname, &size);
-  if (new < 0)
+  new_ = accept(sock, (struct sockaddr *) &clientname, &size);
+  if (new_ < 0)
     {
       perror("accept");
       exit(EXIT_FAILURE);
@@ -73,7 +73,7 @@ main(void)
           inet_ntop(AF_INET6, &clientname.sin6_addr, buf, sizeof(buf)),
           ntohs(clientname.sin6_port));
 
-  if (read(new, buf, 1) < 0)
+  if (read(new_, buf, 1) < 0)
     {
       perror("read");
       exit(EXIT_FAILURE);
@@ -81,7 +81,7 @@ main(void)
 
   fprintf(stderr, "Byte received: 0x%x\n", buf[0]);
 
-  close(new);
+  close(new_);
   close(sock);
 
   exit(EXIT_SUCCESS);

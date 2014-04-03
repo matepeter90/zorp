@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -137,7 +136,10 @@ z_policy_struct_setattr(ZPolicyObj *s, gchar *name, ZPolicyObj *new_value)
 
   res = z_policy_dict_set_value(self->dict, self->is_config, name, new_value);
   if (res < 0 && !PyErr_Occurred())
+    {
        z_policy_raise_exception_obj(PyExc_AttributeError, "Error writing attribute");
+       res = -1;
+    }
   else if (res > 0)
     {
       /* not found in dict, create a new entry */
@@ -148,7 +150,7 @@ z_policy_struct_setattr(ZPolicyObj *s, gchar *name, ZPolicyObj *new_value)
       res = 0;
     }
 
-  return (res != 0);
+  return res;
 }
 
 ZPolicyObj *
@@ -191,17 +193,17 @@ z_policy_struct_module_init(void)
     gint parent_type;
   } types[] =
   {
-    [Z_PST_NONE] = { "Unknown" , -1 },
-    [Z_PST_SHARED] = { "Shared", -1 },
-    [Z_PST_SOCKADDR] = { "SockAddr", -1 },
-    [Z_PST_SOCKADDR_INET] = { "SockAddrInet", Z_PST_SOCKADDR },
-    [Z_PST_SOCKADDR_INET6] = { "SockAddrInet6", Z_PST_SOCKADDR },
-    [Z_PST_SOCKADDR_UNIX] = { "SockAddrUnix", Z_PST_SOCKADDR },
-    [Z_PST_DISPATCH_BIND] = { "DispatchBind", -1 },
-    [Z_PST_DB_SOCKADDR] = { "DBSockAddr", Z_PST_DISPATCH_BIND },
-    [Z_PST_DB_IFACE] = { "DBIface", Z_PST_DISPATCH_BIND },
-    [Z_PST_DB_IFACE_GROUP] = { "DBIfaceGroup", Z_PST_DISPATCH_BIND },
-    [Z_PST_PROXY_GROUP] = { "ProxyGroup", -1 },
+    { "Unknown" , -1 },                      /* Z_PST_NONE */
+    { "Shared", -1 },                        /* Z_PST_SHARED */
+    { "SockAddr", -1 },                      /* Z_PST_SOCKADDR */
+    { "SockAddrInet", Z_PST_SOCKADDR },      /* Z_PST_SOCKADDR_INET */
+    { "SockAddrInet6", Z_PST_SOCKADDR },     /* Z_PST_SOCKADDR_INET6 */
+    { "SockAddrUnix", Z_PST_SOCKADDR },      /* Z_PST_SOCKADDR_UNIX */
+    { "DispatchBind", -1 },                  /* Z_PST_DISPATCH_BIND */
+    { "DBSockAddr", Z_PST_DISPATCH_BIND },   /*Z_PST_DB_SOCKADDR */
+    { "DBIface", Z_PST_DISPATCH_BIND },      /* Z_PST_DB_IFACE */
+    { "DBIfaceGroup", Z_PST_DISPATCH_BIND }, /* Z_PST_DB_IFACE_GROUP */
+    { "ProxyGroup", -1 },                    /* Z_PST_PROXY_GROUP */
   };
   ZPolicyObj *m;
   gint i;
@@ -211,6 +213,8 @@ z_policy_struct_module_init(void)
   for (i = Z_PST_NONE + 1; i < Z_PST_MAX; i++)
     {
       gchar type_ref[64];
+      PyTypeObject *py_type_object;
+      ZPolicyObj *policy_object;
 
       g_assert(types[i].name);
 
@@ -221,12 +225,16 @@ z_policy_struct_module_init(void)
           z_policy_struct_types[i].tp_doc = types[i].name;
           if (types[i].parent_type != -1)
             {
-              z_policy_var_ref((ZPolicyObj *) &z_policy_struct_types[types[i].parent_type]);
+              py_type_object = &z_policy_struct_types[types[i].parent_type];
+              policy_object = (ZPolicyObj *) py_type_object;
+              z_policy_var_ref(policy_object);
               z_policy_struct_types[i].tp_base = &z_policy_struct_types[types[i].parent_type];
             }
         }
       PyType_Ready(&z_policy_struct_types[i]);
-      Py_INCREF(&z_policy_struct_types[i]);
+      py_type_object = &z_policy_struct_types[i];
+      policy_object = (ZPolicyObj *) py_type_object;
+      Py_INCREF(policy_object);
 
       g_snprintf(type_ref, sizeof(type_ref), "%sType", types[i].name);
       PyModule_AddObject(m, type_ref, (ZPolicyObj *) &z_policy_struct_types[i]);
@@ -235,56 +243,56 @@ z_policy_struct_module_init(void)
 
 PyTypeObject z_policy_struct_types[Z_PST_MAX] =
 {
-  [Z_PST_NONE] =
   {
     /* used as a template type for other types */
     PyObject_HEAD_INIT(&PyType_Type)
 
-    .ob_size = 0,
-    .tp_name = "ZPolicyStruct",
-    .tp_basicsize = sizeof(ZPolicyStruct),
-    .tp_itemsize = 0,
-    .tp_dealloc = (destructor)z_policy_struct_free,
-    .tp_print = NULL,
-    .tp_getattr = (getattrfunc) z_policy_struct_getattr,
-    .tp_setattr = (setattrfunc) z_policy_struct_setattr,
-    .tp_compare = NULL,
-    .tp_repr = z_policy_struct_str,
-    .tp_as_number = NULL,
-    .tp_as_sequence = NULL,
-    .tp_as_mapping = NULL,
-    .tp_hash = NULL,
-    .tp_call = NULL,
-    .tp_str = z_policy_struct_str,
-    .tp_getattro = NULL,
-    .tp_setattro = NULL,
-    .tp_as_buffer = NULL,
-    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .tp_doc = "ZPolicyProxy class",
-    .tp_traverse = NULL,
-    .tp_clear = NULL,
-    .tp_richcompare = NULL,
-    .tp_weaklistoffset = 0,
-    .tp_iter = NULL,
-    .tp_iternext = NULL,
-    .tp_methods = NULL,
-    .tp_members = NULL,
-    .tp_getset = NULL,
-    .tp_base = NULL,
-    .tp_dict = NULL,
-    .tp_descr_get = NULL,
-    .tp_descr_set = NULL,
-    .tp_dictoffset = 0,
-    .tp_init = NULL,
-    .tp_alloc = NULL,
-    .tp_new = PyType_GenericNew,
-    .tp_free = NULL,
-    .tp_is_gc = NULL,
-    .tp_bases = NULL,
-    .tp_mro = NULL,
-    .tp_cache = NULL,
-    .tp_subclasses = NULL,
-    .tp_weaklist = NULL,
-    .tp_del = NULL,
+    0,                                      /* ob_size */
+    "ZPolicyStruct",                        /* tp_name */
+    sizeof(ZPolicyStruct),                  /* tp_basicsize */
+    0,                                      /* tp_itemsize */
+    (destructor)z_policy_struct_free,       /* tp_dealloc */
+    NULL,                                   /* tp_print */
+    (getattrfunc) z_policy_struct_getattr,  /* tp_getattr */
+    (setattrfunc) z_policy_struct_setattr,  /* tp_setattr */
+    NULL,                                   /* tp_compare */
+    z_policy_struct_str,                    /* tp_repr */
+    NULL,                                   /* tp_as_number */
+    NULL,                                   /* tp_as_sequence */
+    NULL,                                   /* tp_as_mapping */
+    NULL,                                   /* tp_hash */
+    NULL,                                   /* tp_call */
+    z_policy_struct_str,                    /* tp_str */
+    NULL,                                   /* tp_getattro */
+    NULL,                                   /* tp_setattro */
+    NULL,                                   /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /* tp_flags */
+    "ZPolicyProxy class",                   /* tp_doc */
+    NULL,                                   /* tp_traverse */
+    NULL,                                   /* tp_clear */
+    NULL,                                   /* tp_reachcompare */
+    0,                                      /* tp_weaklistoffset */
+    NULL,                                   /* tp_iter */
+    NULL,                                   /* tp_iternext */
+    NULL,                                   /* tp_methods */
+    NULL,                                   /* tp_members */
+    NULL,                                   /* tp_getset */
+    NULL,                                   /* tp_base */
+    NULL,                                   /* tp_dict */
+    NULL,                                   /* tp_descr_get */
+    NULL,                                   /* tp_descr_set */
+    0,                                      /* tp_dictoffset */
+    NULL,                                   /* tp_init */
+    NULL,                                   /* tp_alloc */
+    PyType_GenericNew,                      /* tp_new */
+    NULL,                                   /* tp_free */
+    NULL,                                   /* tp_is_gc */
+    NULL,                                   /* tp_bases */
+    NULL,                                   /* tp_mro */
+    NULL,                                   /* tp_cache */
+    NULL,                                   /* tp_subclasses */
+    NULL,                                   /* tp_weaklist */
+    NULL,                                   /* tp_del */
+    0,                                      /* tp_version_tag */
   }
 };

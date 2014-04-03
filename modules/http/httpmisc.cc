@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Balazs Scheidler <bazsi@balabit.hu>
  * Auditor:
@@ -182,7 +181,7 @@ http_string_assign_url_decode(GString *part, gboolean permit_invalid_hex_escape,
 static gboolean
 http_string_assign_url_decode_unicode(GString *part, gboolean permit_invalid_hex_escape, const gchar *str, gint len, const gchar **reason)
 {
-  const guchar *src = (const guchar *) str;
+  const guchar *src = reinterpret_cast<const guchar *>(str);
   gchar *dst;
   gint left = len;
 
@@ -205,7 +204,7 @@ http_string_assign_url_decode_unicode(GString *part, gboolean permit_invalid_hex
 
               *reason = "Hexadecimal encoding too short";
 
-              if (left < 2 || !http_string_url_decode_hex_byte(&cb, src + 1, reason))
+              if (left < 2 || !http_string_url_decode_hex_byte(&cb, reinterpret_cast<const gchar *>(src) + 1, reason))
                 {
                   if (permit_invalid_hex_escape)
                     {
@@ -228,8 +227,8 @@ http_string_assign_url_decode_unicode(GString *part, gboolean permit_invalid_hex
               *reason = "Unicode hexa encoding too short";
 
               if (left < 4 ||
-                  !http_string_url_decode_hex_byte(&cbhi, src + 2, reason) ||
-                  !http_string_url_decode_hex_byte(&cblo, src + 4, reason))
+                  !http_string_url_decode_hex_byte(&cbhi, reinterpret_cast<const gchar *>(src) + 2, reason) ||
+                  !http_string_url_decode_hex_byte(&cblo, reinterpret_cast<const gchar *>(src) + 4, reason))
                 {
                   if (permit_invalid_hex_escape)
                     {
@@ -321,12 +320,12 @@ http_string_append_url_encode(GString *result, const gchar *unsafe_chars, const 
 gboolean
 http_string_append_url_encode_unicode(GString *result, const gchar *unsafe_chars, const gchar *str, gint len, const gchar **reason)
 {
-  const guchar *src;
+  const gchar *src;
   gchar *dst;
   gsize orig_len = result->len;
 
   g_string_set_size(result, orig_len + (len + 1) * 6);
-  src = (const guchar *) str;
+  src = str;
   dst = result->str + orig_len;
 
   while (*src)
@@ -478,7 +477,7 @@ http_string_assign_url_canonicalize_unicode(GString *result, gboolean permit_inv
 
   g_string_set_size(result, (len + 1) * 6);
   dst = result->str;
-  src = (const guchar *) str;
+  src = reinterpret_cast<const guchar *>(str);
 
   while (left)
     {
@@ -493,7 +492,7 @@ http_string_assign_url_canonicalize_unicode(GString *result, gboolean permit_inv
 
               *reason = "Hexadecimal encoding too short";
 
-              if (left < 2 || !http_string_url_decode_hex_byte(&cb, src + 1, reason))
+              if (left < 2 || !http_string_url_decode_hex_byte(&cb, reinterpret_cast<const gchar *>(src) + 1, reason))
                 {
                   if (permit_invalid_hex_escape)
                     {
@@ -518,8 +517,8 @@ http_string_assign_url_canonicalize_unicode(GString *result, gboolean permit_inv
               *reason = "Unicode hexa encoding too short";
 
               if (left < 4 ||
-                  !http_string_url_decode_hex_byte(&cbhi, src + 2, reason) ||
-                  !http_string_url_decode_hex_byte(&cblo, src + 4, reason))
+                  !http_string_url_decode_hex_byte(&cbhi, reinterpret_cast<const gchar *>(src) + 2, reason) ||
+                  !http_string_url_decode_hex_byte(&cblo, reinterpret_cast<const gchar *>(src) + 4, reason))
                 {
                   if (permit_invalid_hex_escape)
                     {

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Andras Kis-Szabo <kisza@sch.bme.hu>
  * Author:  Attila SZALAY <sasa@balabit.hu>
@@ -148,7 +147,7 @@ ftp_command_hash_create(void)
 
   while (ftp_commands[i].name != NULL)
     {
-      g_hash_table_insert(ftp_command_hash, ftp_commands[i].name,
+      g_hash_table_insert(ftp_command_hash, const_cast<char *>(ftp_commands[i].name),
                           &ftp_commands[i]);
       i++;
     }
@@ -162,6 +161,6 @@ ftp_command_hash_create(void)
 FtpInternalCommand *
 ftp_command_hash_get(gchar * name)
 {
-  FtpInternalCommand *wp = g_hash_table_lookup(ftp_command_hash, name);
+  FtpInternalCommand *wp = static_cast<FtpInternalCommand *>(g_hash_table_lookup(ftp_command_hash, name));
   return wp;
 }

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Andras Kis-Szabo <kisza@sch.bme.hu>
  * Author:  Attila SZALAY <sasa@balabit.hu>
@@ -119,7 +118,7 @@ ftp_policy_command_hash_search(FtpProxy *self,gchar *command)
 {
   FtpCommandDescriptor *tmp;
 
-  tmp = g_hash_table_lookup(self->policy_command_hash, command);
+  tmp = static_cast<FtpCommandDescriptor *>(g_hash_table_lookup(self->policy_command_hash, command));
   return tmp != NULL;
 }
 
@@ -160,11 +159,11 @@ ftp_policy_command_hash_do(FtpProxy *self)
   int i;
 
   z_proxy_enter(self);
-  tmp = g_hash_table_lookup(self->policy_command_hash, self->request_cmd->str);
+  tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->policy_command_hash, self->request_cmd->str));
   if (!tmp)
     {
       z_proxy_log(self, FTP_POLICY, 6, "Policy does not contain this request, trying the default; request='%s'", self->request_cmd->str);
-      tmp = g_hash_table_lookup(self->policy_command_hash, "*");
+      tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->policy_command_hash, "*"));
     }
   if (!tmp)
     {
@@ -309,7 +308,7 @@ ftp_policy_answer_hash_do(FtpProxy *self)
   g_snprintf(key2, sizeof(key2), "%s", self->answer_cmd->str);
   key[0] = key1;
   key[1] = key2;
-  tmp = z_dim_hash_table_search(self->policy_answer_hash, 2, key);
+  tmp = static_cast<ZPolicyObj *>(z_dim_hash_table_search(self->policy_answer_hash, 2, key));
   if (!tmp)
     {
       /*LOG
@@ -481,9 +480,9 @@ ftp_policy_feature_hash_search(struct _FtpProxy *self, const gchar *feature)
   z_proxy_enter(self);
 
   strip_parameters_from_ftp_command(feature, ftp_command);
-  res = g_hash_table_lookup(self->policy_features, ftp_command);
+  res = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->policy_features, ftp_command));
   if (!res)
-    res = g_hash_table_lookup(self->policy_features, "*");
+    res = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->policy_features, "*"));
 
   if (!res)
     {

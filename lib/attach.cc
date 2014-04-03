@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor :
@@ -63,8 +62,8 @@ struct _ZAttach
 
 /**
  * z_attach_callback:
- * @self this
- * @conn The connection to add
+ * @param self this
+ * @param conn The connection to add
  *
  * Internal callback function, called when a connection is established.
  * Called from: z_attach_tcp_callback (tcp) or z_attach_start (udp).
@@ -121,12 +120,11 @@ z_attach_callback(ZStream *fdstream, GError *err G_GNUC_UNUSED, gpointer user_da
 
 /**
  * z_attach_start:
- * @self this
+ * @param self this
  *
  * Initiate establishing a connection
  *
- * Returns:
- * TRUE on success
+ * @return TRUE on success
  */
 static gboolean
 z_attach_setup_connector(ZAttach *self)
@@ -156,12 +154,11 @@ z_attach_setup_connector(ZAttach *self)
 
 /**
  * z_attach_start:
- * @self this
+ * @param self this
  *
  * Initiate establishing a connection
  *
- * Returns:
- * TRUE on success
+ * @return TRUE on success
  */
 gboolean
 z_attach_start(ZAttach *self, ZPoll *poll, ZSockAddr **local)
@@ -245,18 +242,17 @@ z_attach_cancel(ZAttach *self)
 
 /**
  * z_attach_new:
- * @proxy The proxy instance of the session
- * @bind_addr The address to bind to
- * @remote The address to connect to
- * @params The optional parameters for the connection
- * @callback Callback function to call when the connection is established
- * @notify Callback to call when the structure is destroyed
+ * @param proxy The proxy instance of the session
+ * @param bind_addr The address to bind to
+ * @param remote The address to connect to
+ * @param params The optional parameters for the connection
+ * @param callback Callback function to call when the connection is established
+ * @param notify Callback to call when the structure is destroyed
  *
  * Allocates and sets up a new instance of ZAttach.
  * (For the connection parameters see ZAttachTCPParams and ZAttachUDPParams.)
  *
- * Returns:
- * The new instance
+ * @return the new instance
  */
 ZAttach *
 z_attach_new(ZProxy *proxy,
@@ -288,12 +284,11 @@ z_attach_new(ZProxy *proxy,
 
 /**
  * z_attach_free:
- * @self this
+ * @param self this
  *
  * Free a ZAttach instance,
  *
- * Returns:
- * The instance
+ * @return the instance
  */
 void
 z_attach_free(ZAttach *self)

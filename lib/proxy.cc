@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Bazsi
  * Auditor : kisza
@@ -47,9 +46,6 @@
 #include <zorp/pyproxy.h>
 #include <zorp/pydispatch.h>
 #include <zorp/szig.h>
-#include <zorp/notification.h>
-#include <zorp/audit.h>
-#include <zorp/pyaudit.h>
 
 #include <stdarg.h>
 #include <sys/socket.h>
@@ -136,7 +132,7 @@ static GHashTable *proxy_hash = NULL;
 
 /**
  * z_proxy_get_service_session_id:
- * @self: the proxy
+ * @param self the proxy
  *
  * Get the session_id of the service instance where the specified proxy
  * instance belongs to. Each session may contain a stack of proxies, each
@@ -169,7 +165,7 @@ z_proxy_get_service_session_id(ZProxy *self)
 
 /**
  * z_proxy_register:
- * @self: The proxy to be registered
+ * @param self The proxy to be registered
  *
  * It registers the proxy instance in the proxy_hash, based on its session name.
  */
@@ -184,7 +180,7 @@ z_proxy_register(ZProxy *self)
 
   G_LOCK(proxy_hash_mutex);
 
-  list = g_hash_table_lookup(proxy_hash, session_id);
+  list = static_cast<GList *>(g_hash_table_lookup(proxy_hash, session_id));
 
   z_proxy_ref(self);
   list_new = g_list_prepend(list, self);
@@ -202,7 +198,7 @@ z_proxy_register(ZProxy *self)
 
 /**
  * z_proxy_unregister:
- * @self: the proxy to be unregistered
+ * @param self the proxy to be unregistered
  *
  * Unregisters the proxy. If the proxy list is no longer used, it is destroyed
  */
@@ -215,7 +211,7 @@ z_proxy_unregister(ZProxy *self)
   session_id = z_proxy_get_service_session_id(self);
 
   G_LOCK(proxy_hash_mutex);
-  list = g_hash_table_lookup(proxy_hash, session_id);
+  list = static_cast<GList *>(g_hash_table_lookup(proxy_hash, session_id));
   list_new = g_list_remove(list, self);
   z_proxy_unref(self);
 
@@ -238,8 +234,8 @@ z_proxy_unregister(ZProxy *self)
 
 /**
  * z_proxy_stop_req_cb:
- * @self: proxy instance
- * @user_data: not used
+ * @param self proxy instance
+ * @param user_data not used
  *
  * Sets the stop request flag for the proxy
  */
@@ -254,7 +250,7 @@ z_proxy_stop_req_cb(gpointer s, gpointer user_data G_GNUC_UNUSED)
 
 /**
  * z_proxy_stop_request:
- * @session_id: proxy thread's session_id
+ * @param session_id proxy thread's session_id
  *
  * Sets the stop request flag for each proxy
  *
@@ -269,7 +265,7 @@ z_proxy_stop_request(const gchar *session_id)
 
   G_LOCK(proxy_hash_mutex);
 
-  list = g_hash_table_lookup(proxy_hash, session_id);
+  list = static_cast<GList *>(g_hash_table_lookup(proxy_hash, session_id));
 
   if (list)
     {
@@ -284,16 +280,16 @@ z_proxy_stop_request(const gchar *session_id)
 
 /**
  * z_proxy_hash_unref_proxy:
- * @key: not used
- * @value: GList instance
- * @user_data: not used
+ * @param key not used
+ * @param value GList instance
+ * @param user_data not used
  *
  * unrefs all proxy in the list
  */
 static void
 z_proxy_hash_unref_proxy(gpointer key G_GNUC_UNUSED, gpointer value, gpointer user_data G_GNUC_UNUSED)
 {
-  GList *list = value, *l;
+  GList *list = static_cast<GList *>(value), *l;
 
   for (l = list; l; l = l->next)
     z_proxy_unref((ZProxy *) l->data);
@@ -334,8 +330,8 @@ z_proxy_hash_destroy(void)
 
 /**
  * z_proxy_policy_call_event:
- * @self this #ZProxy instance
- * @event the called python event
+ * @param self this #ZProxy instance
+ * @param event the called python event
  *
  * Thiis function call the @event event from current instance.
  *
@@ -375,8 +371,8 @@ z_proxy_policy_call_event(ZProxy *self, gchar *event, gchar *old_event_name)
 
 /**
  * z_proxy_policy_call:
- * @self this #ZProxy instance
- * @event the called python event family
+ * @param self this #ZProxy instance
+ * @param event the called python event family
  *
  * This function call a python event family.
  * If event named to "event" it's first call
@@ -417,7 +413,7 @@ z_proxy_policy_call(ZProxy *self, gchar *event, gchar *old_event_name)
 
 /**
  * z_proxy_policy_config:
- * @self: this ZProxy instance
+ * @param self this ZProxy instance
  *
  * Acquires the thread associated with this Proxy instance and calls
  * the __pre_config__, config and __post_config__ events.
@@ -453,7 +449,7 @@ z_proxy_policy_config(ZProxy *self)
 
 /**
  * z_proxy_policy_startup:
- * @self: this ZProxy instance
+ * @param self this ZProxy instance
  *
  * Acquires the thread associated with this TProxy instance and calls
  * the __pre_startup__, startup and __post_startup__ events.
@@ -478,7 +474,7 @@ z_proxy_policy_startup(ZProxy *self)
 
 /**
  * z_proxy_policy_shutdown:
- * @self: this ZProxy instance
+ * @param self this ZProxy instance
  *
  * Acquires the thread associated with this TProxy instance and calls
  * the __pre_shutdown__, shutdown and __post_shutdown events.
@@ -496,7 +492,7 @@ z_proxy_policy_shutdown(ZProxy *self)
 
 /**
  * z_proxy_policy_destroy:
- * @self: this ZProxy instance
+ * @param self this ZProxy instance
  *
  * Acquires the thread associated with this TProxy instance and calls
  * the __destroy__ event.
@@ -524,37 +520,6 @@ z_proxy_policy_destroy(ZProxy *self)
       z_proxy_set_state(self, ZPS_DESTROYING);
     }
   z_proxy_leave(self);
-}
-
-/**
- * z_proxy_set_priority:
- * @self: ZProxy instance
- * @pri: new priority
- *
- * This function changes the proxy priority in the current process. If the
- * proxy has its own thread, then its thread priority is changed, if it is a
- * nonblocking proxy, nothing is changed.
- *
- * The current proxy priority is stored in the self->proxy_pri member.
- **/
-void
-z_proxy_set_priority(ZProxy *self, GThreadPriority pri)
-{
-  GList *l;
-
-  if (self->proxy_pri != pri)
-    {
-      if ((self->flags & ZPF_NONBLOCKING) == 0 && self->proxy_thread)
-        {
-          g_thread_set_priority(self->proxy_thread->thread, pri);
-        }
-      for (l = self->child_proxies; l; l = l->next)
-        {
-          if (z_proxy_get_state(l->data) > ZPS_CONFIG && z_proxy_get_state(l->data) < ZPS_SHUTTING_DOWN)
-            z_proxy_set_priority(l->data, pri);
-        }
-      self->proxy_pri = pri;
-    }
 }
 
 
@@ -588,11 +553,12 @@ z_proxy_set_server_address_no_acquire(ZProxy *self, const gchar *host, gint port
 }
 
 /**
- * Set server address for using by z_proxy_connect_server
- * @param self[in,out]: ZProxy instance
- * @param host[in]: remote server address
+ * Set server address for using by z_proxy_connect_server.
+ *
+ * @param[in,out] self: ZProxy instance
+ * @param[in] host: remote server address
  * @param port: remote server port
- * @return: TRUE on success, FALSE otherwise
+ * @return TRUE on success, FALSE otherwise
  */
 gboolean
 z_proxy_set_server_address(ZProxy *self, const gchar *host, gint port)
@@ -606,9 +572,9 @@ z_proxy_set_server_address(ZProxy *self, const gchar *host, gint port)
 
 /**
  * z_proxy_connect_server:
- * @self: proxy instance
- * @host: host to connect to, used as a hint by the policy layer but may as well be ignored
- * @port: port in host to connect to
+ * @param self proxy instance
+ * @param host host to connect to, used as a hint by the policy layer but may as well be ignored
+ * @param port port in host to connect to
  *
  * Send a connectServer event to the associated policy object.  Returns TRUE
  * if the server-side connection is established, otherwise the
@@ -687,9 +653,12 @@ z_proxy_connect_server(ZProxy *self, const gchar *host, gint port)
 }
 
 /**
- * z_proxy_user_authenticated:
- * @self: proxy instance
- * @entity: the name of the authenticated entity
+ * Signal that user authentication has been completed.
+ *
+ * @param self proxy instance
+ * @param entity the name of the authenticated entity
+ * @param groups list of group names the entity is part of
+ * @param type the method how the authentication has been done
  *
  * This function is called by the proxy when it decides that the user is
  * authenticated by some inband authentication method.
@@ -749,6 +718,8 @@ z_proxy_user_authenticated(ZProxy *self, const gchar *entity, gchar const **grou
 
 
 /**
+ * Query client and server addresses of the proxy without grabbing the Python thread state.
+ *
  * @param self proxy instance
  * @param protocol the protocol number (ZD_PROTO_*) is returned here
  * @param client_address the remote address of the client is returned here
@@ -761,7 +732,7 @@ z_proxy_user_authenticated(ZProxy *self, const gchar *entity, gchar const **grou
  * to the client and server. The utilized application protocol is also
  * returned and the listener address which accepted the connection.
  *
- * NOTE: this function assumes that a Python thread state is acquired.
+ * \note This function assumes that a Python thread state is acquired.
  **/
 gboolean
 z_proxy_get_addresses_locked(ZProxy *self,
@@ -826,6 +797,8 @@ z_proxy_get_addresses_locked(ZProxy *self,
 }
 
 /**
+ * Query client and server addresses of the proxy.
+ *
  * @param self proxy instance
  * @param protocol the protocol number (ZD_PROTO_*) is returned here
  * @param client_address the remote address of the client is returned here
@@ -838,7 +811,7 @@ z_proxy_get_addresses_locked(ZProxy *self,
  * to the client and server. The utilized application protocol is also
  * returned and the listener address which accepted the connection.
  *
- * NOTE: this function acquires the thread state associated with @self.
+ * \note This function acquires the thread state associated with self.
  **/
 gboolean
 z_proxy_get_addresses(ZProxy *self,
@@ -855,14 +828,19 @@ z_proxy_get_addresses(ZProxy *self,
 }
 
 /**
- * z_proxy_set_parent:
- * @self: ZProxy instance referring to self
- * @parent: ZProxy instance referring to the parent proxy
+ * Set parent proxy reference in a proxy instance.
+ *
+ * @param self ZProxy instance referring to self
+ * @param parent ZProxy instance referring to the parent proxy
  *
  * This function is called to change the reference to the parent proxy.
  * A value of NULL specifies to drop the reference, anything else
  * removes the earlier reference and assigns a new one. See the
  * comment on locking at the beginning of this file for more details.
+ *
+ * FIXME: either the description here or the code is broken, since it does not seem to modify an already existing reference.
+ *
+ * @return TRUE if setting the parent proxy was successful.
  **/
 gboolean
 z_proxy_set_parent(ZProxy *self, ZProxy *parent)
@@ -904,9 +882,10 @@ z_proxy_set_parent(ZProxy *self, ZProxy *parent)
 }
 
 /**
- * z_proxy_add_child:
- * @self: ZProxy instance referring to self
- * @child_proxy: ZProxy instance to be added to the child list
+ * Add a child proxy instance to the list of child proxies.
+ *
+ * @param self ZProxy instance referring to self
+ * @param child_proxy ZProxy instance to be added to the child list
  *
  * This function adds the specified ZProxy instance to the child_proxies
  * linked list.
@@ -924,9 +903,10 @@ z_proxy_add_child(ZProxy *self, ZProxy *child_proxy)
 }
 
 /**
- * z_proxy_del_child:
- * @self: ZProxy instance referring to self
- * @child_proxy: ZProxy instance to be deleted from the child_proxies list
+ * Remove a child proxy from the list of child proxies.
+ *
+ * @param self ZProxy instance referring to self
+ * @param child_proxy ZProxy instance to be deleted from the child_proxies list
  *
  * This function removes @child_proxy from the child_proxies list in @self.
  **/
@@ -955,9 +935,10 @@ z_proxy_get_group(ZProxy *self)
 }
 
 /**
- * z_proxy_add_iface:
- * @self: ZProxy instance
- * @iface: exported interface to add
+ * Register a proxy interface.
+ *
+ * @param self ZProxy instance
+ * @param iface exported interface to add
  *
  * This function adds an exported function interface callable from
  * other proxies to the set of supported interface.
@@ -966,35 +947,37 @@ void
 z_proxy_add_iface(ZProxy *self, ZProxyIface *iface)
 {
   z_object_ref(&iface->super);
-  g_static_mutex_lock(&self->interfaces_lock);
+  g_mutex_lock(&self->interfaces_lock);
   self->interfaces = g_list_prepend(self->interfaces, iface);
-  g_static_mutex_unlock(&self->interfaces_lock);
+  g_mutex_unlock(&self->interfaces_lock);
 }
 
 /**
- * z_proxy_del_iface:
- * @self: ZProxy instance
- * @iface: exported interface to delete
+ * Unregister a proxy interface.
+ *
+ * @param self ZProxy instance
+ * @param iface exported interface to delete
  *
  * This function deletes the interface specified in @iface from the set of
  * supported interfaces.
  *
- * NOTE: the locking implemented here assumes that the destructor for
+ * \note The locking implemented here assumes that the destructor for
  * z_proxy_iface will not touch interfaces lock again.
  **/
 void
 z_proxy_del_iface(ZProxy *self, ZProxyIface *iface)
 {
-  g_static_mutex_lock(&self->interfaces_lock);
+  g_mutex_lock(&self->interfaces_lock);
   self->interfaces = g_list_remove(self->interfaces, iface);
-  g_static_mutex_unlock(&self->interfaces_lock);
+  g_mutex_unlock(&self->interfaces_lock);
   z_object_unref(&iface->super);
 }
 
 /**
- * z_proxy_find_iface:
- * @self: ZProxy instance
- * @compat: search for an interface compatible with this class
+ * Look up a proxy interface.
+ *
+ * @param self ZProxy instance
+ * @param compat search for an interface compatible with this class
  *
  * This function iterates on the set of supported interfaces in @self and
  * returns the first compatible with the class specified in @compat.
@@ -1015,7 +998,7 @@ z_proxy_find_iface(ZProxy *self, ZClass *compat)
       z_proxy_log(self, CORE_ERROR, 3, "Internal error, trying to look up a non-ZProxyIface compatible interface;");
       return NULL;
     }
-  g_static_mutex_lock(&self->interfaces_lock);
+  g_mutex_lock(&self->interfaces_lock);
   for (p = self->interfaces; p; p = p->next)
     {
       ZObject *obj;
@@ -1025,11 +1008,11 @@ z_proxy_find_iface(ZProxy *self, ZClass *compat)
       if (z_object_is_compatible(obj, compat))
         {
           iface = (ZProxyIface *) z_object_ref(obj);
-          g_static_mutex_unlock(&self->interfaces_lock);
+          g_mutex_unlock(&self->interfaces_lock);
           return iface;
         }
     }
-  g_static_mutex_unlock(&self->interfaces_lock);
+  g_mutex_unlock(&self->interfaces_lock);
   return NULL;
 }
 
@@ -1178,12 +1161,14 @@ z_proxy_query_stream(ZProxy *self, gchar *name, gpointer value G_GNUC_UNUSED)
 
 
 /**
- * z_proxy_config_method:
- * @self: ZProxy instance
+ * Default config method of ZProxy.
+ *
+ * @param self ZProxy instance
  *
  * This function is referenced as the default config method for the ZProxy
  * class. It calls the "config" method in the policy.
- * Returns FALSE upon failure, and TRUE otherwise.
+ *
+ * @return FALSE upon failure, and TRUE otherwise.
  **/
 gboolean
 z_proxy_config_method(ZProxy *self)
@@ -1213,12 +1198,14 @@ z_proxy_config_method(ZProxy *self)
 }
 
 /**
- * z_proxy_startup_method:
- * @self: ZProxy instance
+ * Default startup method of ZProxy.
+ *
+ * @param self ZProxy instance
  *
  * This function is referenced as the default startup method for the ZProxy
  * class. It calls the "startup" method in the policy.
- * Returns FALSE upon failure, and TRUE otherwise.
+ *
+ * @return FALSE upon failure, and TRUE otherwise.
  **/
 gboolean
 z_proxy_startup_method(ZProxy *self)
@@ -1227,8 +1214,9 @@ z_proxy_startup_method(ZProxy *self)
 }
 
 /**
- * z_proxy_main_method:
- * @self: ZProxy instance
+ * Default main method of ZProxy.
+ *
+ * @param self ZProxy instance
  *
  * This function is referenced as the default main method for the ZProxy
  * class. Currently it does nothing and should be overriden in descendant
@@ -1241,12 +1229,14 @@ z_proxy_main_method(ZProxy *self G_GNUC_UNUSED)
 }
 
 /**
- * z_proxy_shutdown_method:
- * @self: ZProxy instance
+ * Default shutdown method of ZProxy.
+ *
+ * @param self ZProxy instance
  *
  * This function is referenced as the default shutdown method for the ZProxy
  * class. It calls the "shutdown" method in the policy.
- * Returns FALSE upon failure, and TRUE otherwise.
+ *
+ * @return FALSE upon failure, and TRUE otherwise.
  **/
 void
 z_proxy_shutdown_method(ZProxy *self)
@@ -1255,8 +1245,9 @@ z_proxy_shutdown_method(ZProxy *self)
 }
 
 /**
- * z_proxy_destroy_method:
- * @self: proxy instance
+ * Default destroy method of ZProxy.
+ *
+ * @param self proxy instance
  *
  * This function is called from proxy implementation when the proxy is to
  * exit. Frees up associated resources, closes streams, etc. Note that the
@@ -1285,10 +1276,10 @@ z_proxy_destroy_method(ZProxy *self)
       z_proxy_del_child(self, (ZProxy *) self->child_proxies->data);
     }
 
-  g_static_mutex_lock(&self->interfaces_lock);
+  g_mutex_lock(&self->interfaces_lock);
   ifaces = self->interfaces;
   self->interfaces = NULL;
-  g_static_mutex_unlock(&self->interfaces_lock);
+  g_mutex_unlock(&self->interfaces_lock);
 
   while (ifaces)
     {
@@ -1344,8 +1335,9 @@ z_proxy_destroy_method(ZProxy *self)
 }
 
 /**
- * z_proxy_run_method:
- * @self: ZProxy instance
+ * Default run method of ZProxy.
+ *
+ * @param self ZProxy instance
  *
  * This function is referenced as the default run method for the ZProxy
  * class. It is started by the proxy specific thread and calls the
@@ -1370,8 +1362,9 @@ z_proxy_run(ZProxy *self)
 }
 
 /**
- * z_proxy_thread_func:
- * @s: ZProxy instance as a general pointer
+ * Thread function of a proxy.
+ *
+ * @param s ZProxy instance as a general pointer
  *
  * This is the default thread function for proxies. The thread is started
  * in z_proxy_start().
@@ -1389,8 +1382,10 @@ z_proxy_thread_func(gpointer s)
 }
 
 /**
- * z_proxy_threaded_start:
- * @self: ZProxy instance
+ * Create and start a proxy thread and start a proxy in it.
+ *
+ * @param self ZProxy instance
+ * @param proxy_group proxy group to start the proxy in
  *
  * Starts the proxy by creating the new proxy thread. This function
  * is usually called by proxy constructors.
@@ -1413,6 +1408,7 @@ z_proxy_threaded_start(ZProxy *self, ZProxyGroup *proxy_group)
     }
   return TRUE;
 }
+
 
 gboolean
 z_proxy_nonblocking_start(ZProxy *self, ZProxyGroup *proxy_group)
@@ -1437,8 +1433,9 @@ z_proxy_nonblocking_stop(ZProxy *self)
 }
 
 /**
- * z_proxy_wakeup:
- * @self: ZProxy instance
+ * Wake up the main loop of a proxy.
+ *
+ * @param self ZProxy instance
  *
  * This function should try its best to wake-up the specified ZProxy
  * instance from sleeping, to check for example the stop-request flag.
@@ -1458,15 +1455,16 @@ z_proxy_wakeup_method(ZProxy *self)
 }
 
 /**
- * z_proxy_loop_iteration:
- * @s: the proxy instance
+ * Do common tasks that need to be done in each main loop iteration.
+ *
+ * @param s the proxy instance
  *
  * This function is to be called by proxies in their main loop. Whenever
  * this function returns FALSE the proxy should finish its processing and exit.
  *
  * It currently calls propagate_channel_props and checks the ZPF_STOP_REQUEST flag.
  *
- * Returns: TRUE if the proxy can continue, FALSE if it has to be stopped
+ * @return TRUE if the proxy can continue, FALSE if it has to be stopped
  *
  */
 gboolean
@@ -1490,14 +1488,15 @@ z_proxy_loop_iteration(ZProxy *s)
 
 
 /**
- * z_proxy_new:
- * @proxy_class: proxy class to instantiate
- * @params: ZProxyParams containing ZProxy parameters
+ * Construct a new proxy instance.
+ *
+ * @param proxy_class proxy class to instantiate
+ * @param params ZProxyParams containing ZProxy parameters
  *
  * This function is to be called from proxy constructors to initialize
  * common fields in the ZProxy struct.
  *
- * NOTE: unlike in previous versions, z_proxy_new is called with the Python
+ * \note Unlike in previous versions, z_proxy_new is called with the Python
  * interpreter unlocked, thus it must grab the interpreter lock to create
  * thread specific Python state.
  *
@@ -1526,7 +1525,7 @@ z_proxy_new(ZClass *proxy_class, ZProxyParams *params)
 
   self->dict = z_policy_dict_new();
 
-  g_static_mutex_init(&self->interfaces_lock);
+  g_mutex_init(&self->interfaces_lock);
 
   iface = (ZProxyIface *) z_proxy_basic_iface_new(Z_CLASS(ZProxyBasicIface), self);
   z_proxy_add_iface(self, iface);
@@ -1548,8 +1547,8 @@ z_proxy_new(ZClass *proxy_class, ZProxyParams *params)
 }
 
 /**
- * z_proxy_free_method:
- * @self: proxy instance
+ * Free a proxy instance.
+ * @param self proxy instance
  *
  * Called when the proxy object is finally to be freed (when the Python layer
  * releases its reference). Calls the proxy specific free function and
@@ -1563,7 +1562,7 @@ z_proxy_free_method(ZObject *s)
   z_enter();
   z_proxy_log(self, CORE_DEBUG, 7, "Freeing ZProxy instance;");
   z_proxy_group_unref(self->group);
-  g_static_mutex_free(&self->interfaces_lock);
+  g_mutex_clear(&self->interfaces_lock);
   z_object_free_method(s);
   z_leave();
 }
@@ -1573,15 +1572,15 @@ static ZProxyFuncs z_proxy_funcs =
   {
     Z_FUNCS_COUNT(ZProxy),
     z_proxy_free_method,
-  },
-  .config = z_proxy_config_method,
-  .startup = z_proxy_startup_method,
-  .main = z_proxy_main_method,
-  .shutdown = z_proxy_shutdown_method,
-  .destroy = z_proxy_destroy_method,
-  .nonblocking_init = NULL,
-  .nonblocking_deinit = NULL,
-  .wakeup = z_proxy_wakeup_method,
+  }, /* super */
+  z_proxy_config_method, /* config */
+  z_proxy_startup_method, /* startup */
+  z_proxy_main_method, /* main */
+  z_proxy_shutdown_method, /* shutdown */
+  z_proxy_destroy_method, /* destroy */
+  NULL, /* nonblocking_init */
+  NULL, /* nonblocking_deinit */
+  z_proxy_wakeup_method, /* wakeup */
 };
 
 Z_CLASS_DEF(ZProxy, ZObject, z_proxy_funcs);
@@ -1589,29 +1588,28 @@ Z_CLASS_DEF(ZProxy, ZObject, z_proxy_funcs);
 /* ZProxyIface */
 
 /**
- * z_proxy_iface:
- * @class: derived class description
- * @proxy: proxy instance to be associated with this interface
+ * Constructor for ZProxyIface objects and derivates.
  *
- * Constructor for ZProxyIface objects and derivates. A ZProxyIface
- * class encapsulates a function interface which permits inter-proxy
- * communication.
+ * @param class derived class description
+ * @param proxy proxy instance to be associated with this interface
+ *
+ * A ZProxyIface class encapsulates a function interface which permits
+ * inter-proxy communication.
  **/
 ZProxyIface *
-z_proxy_iface_new(ZClass *class, ZProxy *proxy)
+z_proxy_iface_new(ZClass *class_, ZProxy *proxy)
 {
   ZProxyIface *self;
 
-  self = Z_NEW_COMPAT(class, ZProxyIface);
+  self = Z_NEW_COMPAT(class_, ZProxyIface);
   self->owner = z_proxy_ref(proxy);
   return self;
 }
 
 /**
- * z_proxy_iface_free_method:
- * @s: ZProxyIface instance passed as a ZObject pointer
- *
  * Destructor for ZProxyIface objects, frees associated references.
+ *
+ * @param s ZProxyIface instance passed as a ZObject pointer
  **/
 void
 z_proxy_iface_free_method(ZObject *s)
@@ -1667,18 +1665,17 @@ z_proxy_basic_iface_set_var_method(ZProxyBasicIface *self G_GNUC_UNUSED, const g
 
 
 /**
- * z_proxy_basic_iface_new:
- * @class: class description
- * @proxy: associated proxy
- *
  * Constructor for ZProxyBasicIface class, derived from ZProxyIface.
+ *
+ * @param class class description
+ * @param proxy associated proxy
  **/
 ZProxyBasicIface *
-z_proxy_basic_iface_new(ZClass *class, ZProxy *proxy)
+z_proxy_basic_iface_new(ZClass *class_, ZProxy *proxy)
 {
   ZProxyBasicIface *self;
 
-  self = (ZProxyBasicIface *) z_proxy_iface_new(class, proxy);
+  self = (ZProxyBasicIface *) z_proxy_iface_new(class_, proxy);
   return self;
 }
 
@@ -1687,9 +1684,9 @@ ZProxyBasicIfaceFuncs z_proxy_basic_iface_funcs =
   {
     Z_FUNCS_COUNT(ZObject),
     NULL
-  },
-  .get_var = z_proxy_basic_iface_get_var_method,
-  .set_var = z_proxy_basic_iface_set_var_method,
+  }, /* super */
+  z_proxy_basic_iface_get_var_method, /* get_var */
+  z_proxy_basic_iface_set_var_method, /* set_var */
 };
 
 Z_CLASS_DEF(ZProxyBasicIface, ZProxyIface, z_proxy_basic_iface_funcs);
@@ -1699,10 +1696,10 @@ ZProxyStackIfaceFuncs z_proxy_stack_iface_funcs =
   {
     Z_FUNCS_COUNT(ZObject),
     NULL
-  },
-  .set_verdict = NULL,
-  .get_content_hint = NULL,
-  .set_content_hint = NULL
+  }, /* super */
+  NULL, /* get_verdict */
+  NULL, /* get_content_hint */
+  NULL /* set_content_hint */
 };
 
 Z_CLASS_DEF(ZProxyStackIface, ZProxyIface, z_proxy_stack_iface_funcs);
@@ -1711,9 +1708,9 @@ ZProxyHostIfaceFuncs z_proxy_host_iface_funcs =
 {
   {
     Z_FUNCS_COUNT(ZObject),
-    .free_fn = NULL
-  },
-  .check_name = NULL,
+    NULL
+  }, /* super */
+  NULL, /* check_name */
 };
 
 Z_CLASS_DEF(ZProxyHostIface, ZProxyIface, z_proxy_host_iface_funcs);

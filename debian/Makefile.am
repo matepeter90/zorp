@@ -2,13 +2,20 @@ EXTRA_DIST = changelog compat control copyright rules instances.conf \
 	libzorp@PACKAGE_SUFFIX@@LIBZORP_LT_COMPAT_BRANCH@.files \
 	libzorp@PACKAGE_SUFFIX@@LIBZORP_LT_RELEASE@-dev.files \
 	python-kzorp.files \
+	python-zorp@PACKAGE_SUFFIX@-base.pyinstall \
+	kzorp.files \
+	kzorp.kzorpd.init \
 	zorp@PACKAGE_SUFFIX@.docs \
 	zorp@PACKAGE_SUFFIX@.files \
+	zorp@PACKAGE_SUFFIX@.pyinstall \
 	zorp@PACKAGE_SUFFIX@.init \
 	zorp@PACKAGE_SUFFIX@.postinst \
+	zorp@PACKAGE_SUFFIX@-base.files \
+	zorp@PACKAGE_SUFFIX@-base.postinst \
 	zorp@PACKAGE_SUFFIX@-modules.files \
 	zorp@PACKAGE_SUFFIX@-modules.conffiles \
 	zorp@PACKAGE_SUFFIX@-modules.postrm \
+	zorp@PACKAGE_SUFFIX@-modules.pyinstall \
 	zorp@PACKAGE_SUFFIX@-doc.files \
 	zorp@PACKAGE_SUFFIX@-doc.doc-base.reference \
 	zorp@PACKAGE_SUFFIX@-doc.doc-base.tutorial \
@@ -22,6 +29,9 @@ libzorp@PACKAGE_SUFFIX@@LIBZORP_LT_COMPAT_BRANCH@.files: libzorp.files.in
 libzorp@PACKAGE_SUFFIX@@LIBZORP_LT_RELEASE@-dev.files: libzorp-dev.files.in
 	cp $< $@
 
+python-zorp@PACKAGE_SUFFIX@-base.pyinstall: python-zorp-base.pyinstall.in
+	cp $< $@
+
 zorp@PACKAGE_SUFFIX@-doc.files: zorp-doc.files.in
 	cp $< $@
 
@@ -31,7 +41,13 @@ zorp@PACKAGE_SUFFIX@.docs: zorp.docs.in
 zorp@PACKAGE_SUFFIX@.init: zorp.init.in
 	cp $< $@
 
+zorp@PACKAGE_SUFFIX@.pyinstall: zorp.pyinstall.in
+	cp $< $@
+
 zorp@PACKAGE_SUFFIX@-modules.postrm: zorp-modules.postrm.in
+	cp $< $@
+
+zorp@PACKAGE_SUFFIX@-modules.pyinstall: zorp-modules.pyinstall.in
 	cp $< $@
 
 zorp@PACKAGE_SUFFIX@-modules.files: zorp-modules.files.in
@@ -56,6 +72,12 @@ zorp@PACKAGE_SUFFIX@-munin-plugins.postinst: zorp-munin-plugins.postinst.in
 	cp $< $@
 
 zorp@PACKAGE_SUFFIX@-nagios-plugins.files: zorp-nagios-plugins.files.in
+	cp $< $@
+
+zorp@PACKAGE_SUFFIX@-base.files: zorp-base.files.in
+	cp $< $@
+
+zorp@PACKAGE_SUFFIX@-base.postinst: zorp-base.postinst.in
 	cp $< $@
 
 changelog: changelog.in

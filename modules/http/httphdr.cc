@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author: Balazs Scheidler <bazsi@balabit.hu>
  * Auditor:
@@ -39,7 +38,7 @@
  * used, the rest is dropped. All headers that is likely to be used
  * for an access control decision should be added here
  */
-static gchar *smuggle_headers[] =
+static const gchar *smuggle_headers[] =
   {
     "Content-Length",      /* makes complete request smuggling possible */
     "Transfer-Encoding",   /* trick the proxy to use a different transfer-encoding than the server */
@@ -54,13 +53,13 @@ static gchar *smuggle_headers[] =
 gboolean
 http_header_equal(gconstpointer k1, gconstpointer k2)
 {
-  return g_ascii_strcasecmp(k1, k2) == 0;
+  return g_ascii_strcasecmp(static_cast<const gchar *>(k1), static_cast<const gchar *>(k2)) == 0;
 }
 
 guint
 http_header_hash(gconstpointer key)
 {
-  const char *p = key;
+  const char *p = static_cast<const char *>(key);
   guint h = toupper(*p);
 
   if (h)
@@ -79,7 +78,7 @@ http_header_free(HttpHeader *h)
 }
 
 void
-http_log_headers(HttpProxy *self, gint side, gchar *tag)
+http_log_headers(HttpProxy *self, ZEndpoint side, const gchar *tag)
 {
   HttpHeaders *hdrs = &self->headers[side];
 
@@ -114,7 +113,7 @@ http_log_headers(HttpProxy *self, gint side, gchar *tag)
    added header */
 
 HttpHeader *
-http_add_header(HttpHeaders *hdrs, gchar *name, gint name_len, gchar *value, gint value_len)
+http_add_header(HttpHeaders *hdrs, const gchar *name, gint name_len, gchar *value, gint value_len)
 {
   HttpHeader *h;
   HttpHeader *orig;
@@ -177,7 +176,7 @@ http_clear_headers(HttpHeaders *hdrs)
   GList *l;
 
   for (l = hdrs->list; l; l = l->next)
-    http_header_free(l->data);
+    http_header_free(static_cast<HttpHeader *>(l->data));
 
   g_list_free(hdrs->list);
   hdrs->list = NULL;
@@ -186,15 +185,15 @@ http_clear_headers(HttpHeaders *hdrs)
 }
 
 gboolean
-http_lookup_header(HttpHeaders *headers, gchar *what, HttpHeader **p)
+http_lookup_header(HttpHeaders *headers, const gchar *what, HttpHeader **p)
 {
   GList *l;
 
-  l = g_hash_table_lookup(headers->hash, what);
+  l = static_cast<GList *>(g_hash_table_lookup(headers->hash, what));
 
   if (l)
     {
-      *p = l->data;
+      *p = static_cast<HttpHeader *>(l->data);
       return TRUE;
     }
 
@@ -345,7 +344,7 @@ http_check_header_charset(HttpProxy *self, gchar *header, guint flags, const gch
 }
 
 gboolean
-http_filter_headers(HttpProxy *self, guint side, HttpHeaderFilter filter)
+http_filter_headers(HttpProxy *self, ZEndpoint side, HttpHeaderFilter filter)
 {
   HttpHeaders *headers = &self->headers[side];
   GHashTable *hash = (side == EP_CLIENT) ? self->request_header_policy : self->response_header_policy;
@@ -368,10 +367,10 @@ http_filter_headers(HttpProxy *self, guint side, HttpHeaderFilter filter)
       g_string_assign_len(self->current_header_name, h->name->str, h->name->len);
       g_string_assign_len(self->current_header_value, h->value->str, h->value->len);
 
-      f = g_hash_table_lookup(hash, self->current_header_name->str);
+      f = static_cast<ZPolicyObj *>(g_hash_table_lookup(hash, self->current_header_name->str));
 
       if (!f)
-        f = g_hash_table_lookup(hash, "*");
+        f = static_cast<ZPolicyObj *>(g_hash_table_lookup(hash, "*"));
 
       if (f)
         {
@@ -590,7 +589,7 @@ http_filter_headers(HttpProxy *self, guint side, HttpHeaderFilter filter)
 }
 
 gboolean
-http_fetch_headers(HttpProxy *self, int side)
+http_fetch_headers(HttpProxy *self, ZEndpoint side)
 {
   HttpHeaders *headers = &self->headers[side];
   gchar *line;
@@ -761,12 +760,12 @@ http_destroy_headers(HttpHeaders *hdrs)
   g_string_free(hdrs->flat, TRUE);
 }
 
-enum
+enum HttpCookieState
   {
     HTTP_COOKIE_NAME,
     HTTP_COOKIE_VALUE,
     HTTP_COOKIE_DOTCOMA
-  } HttpCookieState;
+  };
 
 GHashTable *
 http_parse_header_cookie(HttpHeaders *hdrs)

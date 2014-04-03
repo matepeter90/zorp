@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Andras Kis-Szabo <kisza@sch.bme.hu>
  * Author:  Attila SZALAY <sasa@balabit.hu>
@@ -69,9 +68,9 @@ void ftp_proxy_free(ZObject *s);
 
 void ftp_command_reject(FtpProxy *self);
 
-gboolean ftp_answer_write(FtpProxy *self, gchar *msg);
+gboolean ftp_answer_write(FtpProxy *self, const gchar *msg);
 gboolean ftp_command_write_setup(FtpProxy *self, gchar *answer_c, gchar *answer_p);
-gboolean ftp_command_write(FtpProxy *self, char *msg);
+gboolean ftp_command_write(FtpProxy *self, const char *msg);
 
 static gboolean
 ftp_connect_server_event(FtpProxy *self, gchar *hostname, guint port)
@@ -146,7 +145,7 @@ ftp_data_client_accepted(ZConnection *conn, gpointer user_data)
   if (self->data_stream[EP_CLIENT] || self->data_state == FTP_DATA_CANCEL)
     z_proxy_return(self, FALSE);
 
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
   if (conn && conn->stream)
     {
       gchar tmp_sockaddr[120];
@@ -171,7 +170,7 @@ ftp_data_client_accepted(ZConnection *conn, gpointer user_data)
   if (conn)
     z_connection_destroy(conn, FALSE);
 
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
   z_poll_wakeup(self->poll);
   z_proxy_return(self, TRUE);
 }
@@ -185,7 +184,7 @@ ftp_data_server_accepted(ZConnection *conn, gpointer user_data)
   if (self->data_stream[EP_SERVER] || self->data_state == FTP_DATA_CANCEL)
     z_proxy_return(self, FALSE);
 
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
   if (conn && conn->stream)
     {
       gchar tmp_sockaddr[120];
@@ -210,7 +209,7 @@ ftp_data_server_accepted(ZConnection *conn, gpointer user_data)
   if (conn)
     z_connection_destroy(conn, FALSE);
 
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
   z_poll_wakeup(self->poll);
   z_proxy_return(self, TRUE);
 }
@@ -221,7 +220,7 @@ ftp_data_client_connected(ZConnection *conn, gpointer user_data)
   FtpProxy *self = (FtpProxy *) user_data;
 
   z_proxy_enter(self);
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
   if (!(self->data_state & FTP_DATA_CLIENT_READY) &&
       self->data_state != FTP_DATA_CANCEL &&
       self->data_state != FTP_DATA_DESTROY)
@@ -243,7 +242,7 @@ ftp_data_client_connected(ZConnection *conn, gpointer user_data)
         }
       else
         {
-          /* We assume that lower level log if problem occured */
+          /* We assume that lower level log if problem occurred */
           self->data_state = FTP_DATA_DESTROY;
           self->state = FTP_QUIT;
           self->ftp_data_hangup = TRUE;
@@ -256,7 +255,7 @@ ftp_data_client_connected(ZConnection *conn, gpointer user_data)
         }
       z_poll_wakeup(self->poll);
     }
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
 
   if (conn)
     {
@@ -276,7 +275,7 @@ ftp_data_server_connected(ZConnection *conn, gpointer user_data)
   FtpProxy *self = (FtpProxy *) user_data;
 
   z_proxy_enter(self);
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
   if (!(self->data_state & FTP_DATA_SERVER_READY) &&
       self->data_state != FTP_DATA_CANCEL &&
       self->data_state != FTP_DATA_DESTROY)
@@ -298,7 +297,7 @@ ftp_data_server_connected(ZConnection *conn, gpointer user_data)
         }
       else
         {
-          /* We assume that lower level log, if problem occured */
+          /* We assume that lower level log, if problem occurred */
           self->data_state = FTP_DATA_DESTROY;
           self->state = FTP_SERVER_TO_CLIENT;   /* not considered fatal */
         }
@@ -310,7 +309,7 @@ ftp_data_server_connected(ZConnection *conn, gpointer user_data)
           conn = NULL;
         }
     }
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
 
   if (conn)
     {
@@ -338,7 +337,7 @@ ZDispatchCallbackFunc data_accept_callbacks[] =
 };
 
 gboolean
-ftp_data_prepare_listen(FtpProxy *self, gint side)
+ftp_data_prepare_listen(FtpProxy *self, ZEndpoint side)
 {
   ZDispatchParams dpparam;
   ZDispatchBind *db;
@@ -375,7 +374,7 @@ ftp_data_prepare_listen(FtpProxy *self, gint side)
   z_dispatch_bind_unref(db);
   if (!self->data_listen[side])
     {
-      /* We assume that lower level log if problem occured */
+      /* We assume that lower level log if problem occurred */
       z_proxy_unref(&self->super);
       z_proxy_return(self, FALSE);
     }
@@ -398,7 +397,7 @@ ftp_data_prepare_listen(FtpProxy *self, gint side)
 }
 
 gboolean
-ftp_data_prepare_connect(FtpProxy *self, gint side)
+ftp_data_prepare_connect(FtpProxy *self, ZEndpoint side)
 {
   ZAttachParams aparam;
   ZSockAddr *tmpaddr;
@@ -531,7 +530,7 @@ ftp_data_reset(FtpProxy *self)
       self->data_stream[EP_SERVER] = NULL;
     }
 
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
 
   if (self->data_remote[EP_CLIENT])
     {
@@ -558,7 +557,7 @@ ftp_data_reset(FtpProxy *self)
     }
 
   self->data_state = 0;
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
 
   if (self->transfer)
     {
@@ -631,7 +630,7 @@ ftp_data_start(FtpProxy *self)
 }
 
 static gboolean
-ftp_data_do_ssl_handshake(FtpProxy *self, gint side)
+ftp_data_do_ssl_handshake(FtpProxy *self, ZEndpoint side)
 {
   gboolean rc = TRUE;
 
@@ -680,7 +679,7 @@ ftp_data_create_transfer(FtpProxy *self)
 {
   gboolean rc = TRUE;
   ZStream *streams[EP_MAX];
-  gint first_side;
+  ZEndpoint first_side;
   gchar tmpsaddr_client[120];
   gchar tmpsaddr_server[120];
 
@@ -763,7 +762,7 @@ ftp_data_next_step(FtpProxy *self)
   gchar buf[4096];
 
   z_proxy_enter(self);
-  g_mutex_lock(self->lock);
+  g_mutex_lock(&self->lock);
   z_proxy_trace(self, "data_state = '%lx'", self->data_state);
   if ((self->data_state & FTP_DATA_COMMAND_START) &&
       !(self->data_state & FTP_DATA_SERVER_START))
@@ -776,7 +775,7 @@ ftp_data_next_step(FtpProxy *self)
               if (!z_attach_start(self->data_connect[EP_SERVER], NULL, &self->data_local[EP_SERVER]))
                 {
                   /* NOTE: We assume here, that lower level log if problem occured */
-                  g_mutex_unlock(self->lock);
+                  g_mutex_unlock(&self->lock);
                   ftp_data_reset(self);
                   z_proxy_leave(self);
                   return;
@@ -792,7 +791,7 @@ ftp_data_next_step(FtpProxy *self)
                 on the client or server side.
                */
               z_proxy_log(self, FTP_POLICY, 3, "Possible bounce attack; connect='TRUE', side='server', remote='%s'", z_sockaddr_format(self->data_remote[EP_SERVER], buf, sizeof(buf)));
-              g_mutex_unlock(self->lock);
+              g_mutex_unlock(&self->lock);
               ftp_data_reset(self);
               z_proxy_return(self);
             }
@@ -816,7 +815,7 @@ ftp_data_next_step(FtpProxy *self)
                 on the client or server side.
                */
               z_proxy_log(self, FTP_POLICY, 3, "Possible bounce attack; connect='FALSE', side='server', remote='%s'", z_sockaddr_format(self->data_remote[EP_SERVER], buf, sizeof(buf)));
-              g_mutex_unlock(self->lock);
+              g_mutex_unlock(&self->lock);
               ftp_data_reset(self);
               z_proxy_leave(self);
               return;
@@ -835,7 +834,7 @@ ftp_data_next_step(FtpProxy *self)
               if (!z_attach_start(self->data_connect[EP_CLIENT], NULL, &self->data_local[EP_CLIENT]))
                 {
                   /* NOTE: We assume here, that lower level log if problem occured */
-                  g_mutex_unlock(self->lock);
+                  g_mutex_unlock(&self->lock);
                   ftp_data_reset(self);
                   z_proxy_leave(self);
                   return;
@@ -851,7 +850,7 @@ ftp_data_next_step(FtpProxy *self)
                 on the client or server side.
                */
               z_proxy_log(self, FTP_POLICY, 3, "Possible bounce attack; connect='TRUE', side='client', remote='%s'", z_sockaddr_format(self->data_remote[EP_CLIENT], buf, sizeof(buf)));
-              g_mutex_unlock(self->lock);
+              g_mutex_unlock(&self->lock);
               ftp_data_reset(self);
               z_proxy_return(self);
             }
@@ -872,20 +871,20 @@ ftp_data_next_step(FtpProxy *self)
                 on the client or server side.
                */
               z_proxy_log(self, FTP_POLICY, 3, "Possible bounce attack; connect='FALSE', side='client', remote='%s'", z_sockaddr_format(self->data_remote[EP_CLIENT], buf, sizeof(buf)));
-              g_mutex_unlock(self->lock);
+              g_mutex_unlock(&self->lock);
               ftp_data_reset(self);
               z_proxy_return(self);
             }
         }
 
-      g_mutex_unlock(self->lock);
+      g_mutex_unlock(&self->lock);
       if (!ftp_data_create_transfer(self))
         ftp_data_reset(self);
       z_proxy_return(self);
     }
   else if (self->data_state == FTP_DATA_CANCEL)
     {
-      g_mutex_unlock(self->lock);
+      g_mutex_unlock(&self->lock);
       ftp_data_reset(self);
       z_proxy_return(self);
     }
@@ -894,7 +893,7 @@ ftp_data_next_step(FtpProxy *self)
       /* FIXME
        * Correcly handling if one of the connection closed (server/client)
        */
-      g_mutex_unlock(self->lock);
+      g_mutex_unlock(&self->lock);
       ftp_data_reset(self);
 //      ftp_data_abort(self);
 //      SET_ANSWER(MSG_INVALID_PARAMETER);
@@ -902,7 +901,7 @@ ftp_data_next_step(FtpProxy *self)
 //      ftp_command_reject(self);
       z_proxy_return(self);
     }
-  g_mutex_unlock(self->lock);
+  g_mutex_unlock(&self->lock);
   z_proxy_return(self);
 }
 
@@ -1162,6 +1161,22 @@ ftp_proxy_regvars(FtpProxy *self)
                   Z_VAR_TYPE_INT | Z_VAR_GET | Z_VAR_SET_CONFIG,
                   &self->data_port_max);
 
+  z_proxy_var_new(&self->super, "auth_tls_ok_client",
+                  Z_VAR_TYPE_INT | Z_VAR_GET,
+                  &self->auth_tls_ok[EP_CLIENT]);
+
+  z_proxy_var_new(&self->super, "auth_tls_ok_server",
+                  Z_VAR_TYPE_INT | Z_VAR_GET,
+                  &self->auth_tls_ok[EP_SERVER]);
+
+  z_proxy_var_new(&self->super, "data_protection_enabled_client",
+                  Z_VAR_TYPE_INT | Z_VAR_GET,
+                  &self->data_protection_enabled[EP_CLIENT]);
+
+  z_proxy_var_new(&self->super, "data_protection_enabled_server",
+                  Z_VAR_TYPE_INT | Z_VAR_GET,
+                  &self->data_protection_enabled[EP_SERVER]);
+
   z_proxy_var_new(&self->super, "valid_chars_username",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET_CONFIG,
                   self->valid_chars_username);
@@ -1211,7 +1226,7 @@ ftp_config_set_defaults(FtpProxy * self)
   self->masq_address[EP_SERVER] = g_string_new("");
   self->masq_address[EP_CLIENT] = g_string_new("");
 
-  self->lock = g_mutex_new();
+  g_mutex_init(&self->lock);
   self->timeout = 300000;
   self->max_continuous_line = 100;
   self->policy_command_hash = ftp_policy_command_hash_create();
@@ -1292,9 +1307,9 @@ ftp_config_init(FtpProxy *self)
 }
 
 GIOStatus
-ftp_read_line_get (FtpProxy * self, guint side, gint *error_value)
+ftp_read_line_get (FtpProxy * self, ZEndpoint side, gint *error_value)
 {
-  gint readback = G_IO_STATUS_ERROR;
+  GIOStatus readback = G_IO_STATUS_ERROR;
   guint i;
   gint state;
   char *tmp;
@@ -1308,7 +1323,7 @@ ftp_read_line_get (FtpProxy * self, guint side, gint *error_value)
   *error_value = errno;
   if (readback != G_IO_STATUS_NORMAL)
     {
-      /* NOTE Here we assume that lower level log if problem occured */
+      /* NOTE Here we assume that lower level log if problem occurred */
       self->line_length = 0;
       z_proxy_return(self, readback);
     }
@@ -1664,7 +1679,7 @@ ftp_answer_write_with_setup(FtpProxy *self, gchar *answer_c, gchar *answer_p)
 }
 
 gboolean
-ftp_answer_write(FtpProxy *self, gchar *msg)
+ftp_answer_write(FtpProxy *self, const gchar *msg)
 {
   guint bytes_to_write;
   gboolean back = TRUE;
@@ -1882,7 +1897,7 @@ ftp_command_reject(FtpProxy *self)
 }
 
 gboolean
-ftp_command_write(FtpProxy *self, char *msg)
+ftp_command_write(FtpProxy *self, const char *msg)
 {
   gint bytes_to_write = strlen(msg);
   gboolean back;
@@ -2420,7 +2435,7 @@ ftp_proxy_free(ZObject *s)
   z_poll_quit(self->poll);
   z_poll_unref(self->poll);
   g_free(self->line);
-  g_mutex_free(self->lock);
+  g_mutex_clear(&self->lock);
   if (self->preamble)
     g_free(self->preamble);
   for (i = 0; i < EP_MAX; i++)
@@ -2437,17 +2452,23 @@ ZProxyFuncs ftp_proxy_funcs =
   {
     Z_FUNCS_COUNT(ZProxy),
     ftp_proxy_free,
-  },
-  .config = ftp_config,
-  .main = ftp_main,
-  NULL
+  },          /* super */
+  ftp_config, /* config */
+  NULL,       /* startup */
+  ftp_main,   /* main */
+  NULL,       /* shutdown */
+  NULL,       /* destroy */
+  NULL,       /* nonblocking_init */
+  NULL,       /* nonblocking_deinit */
+  NULL,       /* wakeup */
 };
 
 Z_CLASS_DEF(FtpProxy, ZProxy, ftp_proxy_funcs);
 
 static ZProxyModuleFuncs ftp_module_funcs =
   {
-    .create_proxy = ftp_proxy_new,
+    /* .create_proxy = */ ftp_proxy_new,
+    /* .module_py_init = */ NULL,
   };
 
 /*+ Zorp initialization function +*/

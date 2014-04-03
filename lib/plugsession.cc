@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : bazsi
  * Auditor :
@@ -113,7 +112,7 @@ z_plug_update_eof_mask(ZPlugSession *self, guint add_mask)
     }
 }
 
-static guint
+static GIOStatus
 z_plug_read_input(ZPlugSession *self, ZStream *input, ZPlugIOBuffer *buf)
 {
   GIOStatus rc;
@@ -710,7 +709,7 @@ z_plug_session_new(ZPlugSessionData *session_data, ZStream *client_stream, ZStre
   ZPlugSession *self = g_new0(ZPlugSession, 1);
   gchar buf[Z_STREAM_MAX_NAME];
 
-  self->user_data = user_data;
+  self->user_data = (void **)user_data;
   z_stream_ref(client_stream);
   z_stream_ref(server_stream);
 

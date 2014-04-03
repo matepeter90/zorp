@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -83,7 +82,7 @@ pop3_policy_command_hash_do(Pop3Proxy *self)
 {
   guint rc;
   ZPolicyObj *res;
-  ZPolicyObj *tmp = g_hash_table_lookup(self->commands_policy, self->command->str);
+  ZPolicyObj *tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->commands_policy, self->command->str));
   ZPolicyObj *command_where = NULL;
   ZPolicyObj *answer_where = NULL;
   unsigned int command_do;
@@ -93,7 +92,7 @@ pop3_policy_command_hash_do(Pop3Proxy *self)
     {
       z_proxy_log(self, POP3_DEBUG, 6, "Policy does not contain this request, trying the default; request='%s'",
                   self->command->str);
-      tmp = g_hash_table_lookup(self->commands_policy, "*");
+      tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->commands_policy, "*"));
     }
 
   if (!tmp)
@@ -214,14 +213,14 @@ pop3_policy_response_hash_do(Pop3Proxy *self)
 
   z_proxy_enter(self);
   if (self->command->len)
-    tmp = g_hash_table_lookup(self->commands_policy, self->command->str);
+    tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->commands_policy, self->command->str));
   else
-    tmp = g_hash_table_lookup(self->commands_policy, "GREETING");
+    tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->commands_policy, "GREETING"));
 
   if (!tmp)
     {
       z_proxy_log(self, POP3_DEBUG, 6, "Policy does not contain this request, trying the default; request='%s'", self->command->str);
-      tmp = g_hash_table_lookup(self->commands_policy, "*");
+      tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->commands_policy, "*"));
     }
   if (!tmp)
     {
@@ -332,7 +331,7 @@ pop3_policy_stack_hash_do(Pop3Proxy *self, ZStackedProxy **stacked)
 {
   guint rc;
   ZPolicyObj *res = NULL;
-  ZPolicyObj *tmp = g_hash_table_lookup(self->command_stack, self->command->str);
+  ZPolicyObj *tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->command_stack, self->command->str));
   ZPolicyObj *command_where = NULL;
   ZPolicyObj *stack_proxy = NULL;
   unsigned int command_do;
@@ -340,7 +339,7 @@ pop3_policy_stack_hash_do(Pop3Proxy *self, ZStackedProxy **stacked)
 
   z_proxy_enter(self);
   if (!tmp)
-    tmp = g_hash_table_lookup(self->command_stack, "*");
+    tmp = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->command_stack, "*"));
 
   if (!tmp)
     z_proxy_return(self, TRUE);

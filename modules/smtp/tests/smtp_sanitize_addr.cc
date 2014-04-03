@@ -1,3 +1,6 @@
+#define BOOST_TEST_MAIN
+#include <boost/test/unit_test.hpp>
+
 #include "../smtp.h"
 
 SmtpProxy *dummy;
@@ -12,30 +15,11 @@ test_case(gchar *path, gchar *email, gboolean expected)
   GString *result = g_string_sized_new(128);
   gchar *end = 0;
 
-  if (smtp_sanitize_address(dummy, result, path, TRUE, &end) == expected)
-    {
-      /* printf("result->str=%s\n", result->str); */    /* for parser debugging */
-      if (expected && strcmp(result->str, email) == 0)
-        printf("success, path=%s, email=%s, end=%s\n", path, email, end);
-      else if (!expected)
-        printf("success, path=%s, end=%s\n", path, end);
-      else
-	{
-	  printf("failure, different email, path=%s, email=%s, end=%s\n", path, email, end);
-	  exit_code = 1;
-	}
-
-    }
-  else
-    {
-      printf("failure, different parsing, path=%s, email=%s, result=%s, end=%s\n", path, email, result->str, end);
-      exit_code = 1;
-    }
-  g_string_free(result, TRUE);
+  BOOST_CHECK_MESSAGE(smtp_sanitize_address(dummy, result, path, TRUE, &end) == expected, "failure, different parsing, path=" << path << ", email=" << email << ", result=" << result->str << ", end=" << end);
+  BOOST_CHECK_MESSAGE(expected && (strcmp(result->str, email) == 0) || !expected, "failure, different email, path=" << path <<", email=" << email << ", end=" << end);
 }
 
-int
-main()
+BOOST_AUTO_TEST_CASE(test_sanitize_addr)
 {
   dummy = (SmtpProxy *) z_object_new(Z_CLASS(SmtpProxy));
   dummy->append_domain = g_string_sized_new(0);
@@ -70,5 +54,4 @@ main()
   test_case("<bazsi@balabit.hu", "bazsi@balabit.hu", FALSE);
   test_case("bazsi@balabit.hu>", "bazsi@balabit.hu", FALSE);
   test_case("bounce-debian-gcc=asd=balabit.hu@lists.debian.org SIZE=10037", "bounce-debian-gcc=asd=balabit.hu@lists.debian.org", TRUE);
-  return exit_code;
 }

@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author:  Attila SZALAY <sasa@balabit.hu>
  * Auditor:
@@ -208,7 +207,7 @@ smtp_set_defaults(SmtpProxy *self)
   self->interval_transfer_noop = 60000;
   self->buffer_size = 4096;
 
-  self->active_extensions = 0;
+  self->active_extensions = static_cast<SmtpActionTypes>(0);
 
   self->max_request_length = 512;
   self->max_auth_request_length = 256;
@@ -349,7 +348,7 @@ smtp_fetch_request(SmtpProxy *self)
   if (!smtp_parse_request(self, line, line_len))
     z_proxy_return(self, FALSE);
 
-  self->request_cmd = g_hash_table_lookup(known_commands, self->request->str);
+  self->request_cmd = static_cast<SmtpCommandDesc *>(g_hash_table_lookup(known_commands, self->request->str));
   z_proxy_return(self, TRUE);
 }
 
@@ -575,7 +574,7 @@ smtp_clear_response(SmtpProxy *self)
  * Primarily used to set an error response to be sent back to the client.
  **/
 static void
-smtp_set_response(SmtpProxy *self, gchar *code, gchar *param)
+smtp_set_response(SmtpProxy *self, const gchar *code, const gchar *param)
 {
   z_proxy_enter(self);
   smtp_clear_response(self);
@@ -944,7 +943,7 @@ smtp_generate_received(SmtpProxy *self, GString **dst_string)
     }
   else
     {
-      z_proxy_log(self, SMTP_ERROR, 3, "Couldn't generate received line; error='exception occured'");
+      z_proxy_log(self, SMTP_ERROR, 3, "Couldn't generate received line; error='exception occurred'");
     }
 
   z_policy_unlock(self->super.thread);
@@ -1106,10 +1105,10 @@ smtp_process_transfer(SmtpProxy *self)
           else if (z_transfer2_get_stack_decision(self->transfer) == ZV_ERROR)
             {
               /*LOG
-                This message inidicates that an error occured during stacked proxy handle the contents and Zorp
+                This message inidicates that an error occurred during stacked proxy handle the contents and Zorp
                 send back a temporary error message.
                */
-              z_proxy_log(self, SMTP_POLICY, 3, "Error occured while scanning contents; stack_info='%s'", z_transfer2_get_stack_info(self->transfer));
+              z_proxy_log(self, SMTP_POLICY, 3, "Error occurred while scanning contents; stack_info='%s'", z_transfer2_get_stack_info(self->transfer));
               g_string_assign(self->error_code, "421");
               g_string_assign(self->error_info, "Service not available, closing transmission channel.");
             }
@@ -1622,16 +1621,22 @@ ZProxyFuncs smtp_proxy_funcs =
     Z_FUNCS_COUNT(ZProxy),
     smtp_proxy_free,
   },
-  .config = smtp_config,
-  .main = smtp_main,
-  NULL
+  /* .config = */ smtp_config,
+  /* .startup = */ NULL,
+  /* .main = */ smtp_main,
+  /* .shutdown = */ NULL,
+  /* .destroy = */ NULL,
+  /* .nonblocking_init = */ NULL,
+  /* .nonblocking_deinit = */ NULL,
+  /* .wakeup = */ NULL,
 };
 
 Z_CLASS_DEF(SmtpProxy, ZProxy, smtp_proxy_funcs);
 
 static ZProxyModuleFuncs smtp_module_funcs =
   {
-    .create_proxy = smtp_proxy_new,
+    /* .create_proxy = */ smtp_proxy_new,
+    /* .module_py_init = */ NULL
   };
 
 /**

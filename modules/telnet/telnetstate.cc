@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  ***************************************************************************/
 
@@ -30,9 +29,7 @@
 #include "telnetoption.h"
 #include "telnetlineedit.h"
 #include "telnettls.h"
-#include "telnetpatternmatch.h"
 #include <zorp/zorp.h>
-#include <zorp/notification.h>
 
 static ZVerdict
 process_suboption(TelnetProxy *self, ZEndpoint ep, ZPktBuf *suboption)
@@ -355,7 +352,7 @@ process_opneg_transparent(TelnetProxy *self, ZEndpoint ep, guint8 command, guint
       !telnet_tls_start_negotiate(self))
     {
       z_proxy_log(self, TELNET_ERROR, 3, "TLS negotiation error;");
-      z_proxy_return(self, FALSE);
+      z_proxy_return(self, ZV_UNSPEC);
     }
 
   switch (res)
@@ -444,7 +441,7 @@ process_command_transparent(TelnetProxy *self, ZEndpoint ep, guint8 command)
   g_snprintf(cmd_str, sizeof(cmd_str), "%hhu", command);
 
   z_policy_lock(self->super.thread);
-  res = g_hash_table_lookup(self->negotiation, cmd_str);
+  res = static_cast<ZPolicyObj *>(g_hash_table_lookup(self->negotiation, cmd_str));
   if (res != NULL)
     {
       if (!z_policy_var_parse(res, "I", &option_needed))
@@ -754,13 +751,13 @@ telnet_do_gateway_auth(TelnetProxy *self)
 
   z_policy_lock(self->super.thread);
   gboolean res = z_auth_provider_check_passwd(self->auth, self->super.session_id,
-                                              self->gw_username->str, self->gw_password->str,
+                                              self->gateway_user->str, self->gateway_password->str,
                                               &groups, &self->super);
   z_policy_unlock(self->super.thread);
 
   if (res)
     {
-      res = z_proxy_user_authenticated(&self->super, self->gw_username->str,
+      res = z_proxy_user_authenticated(&self->super, self->gateway_user->str,
                                        (gchar const **) groups,
                                        Z_PROXY_USER_AUTHENTICATED_GATEWAY);
     }
@@ -773,7 +770,7 @@ telnet_do_gateway_auth(TelnetProxy *self)
 static void
 telnet_event_prompt_user(TelnetProxy *self)
 {
-  ZPktBuf *pkt = z_pktbuf_new_from_gstring(self->gw_username_prompt);
+  ZPktBuf *pkt = z_pktbuf_new_from_gstring(self->gateway_user_prompt);
 
   self->line_editor.do_echo = TRUE;
 
@@ -786,7 +783,7 @@ telnet_event_prompt_user(TelnetProxy *self)
 static void
 telnet_event_prompt_password(TelnetProxy *self)
 {
-  ZPktBuf *pkt = z_pktbuf_new_from_gstring(self->gw_password_prompt);
+  ZPktBuf *pkt = z_pktbuf_new_from_gstring(self->gateway_password_prompt);
 
   self->line_editor.do_echo = FALSE;
 
@@ -809,10 +806,10 @@ telnet_event_prompt_server(TelnetProxy *self)
     telnet_change_state(self, TELNET_STATE_PROMPT_SERVER);
 }
 
-static void
-telnet_event_print_greeting(TelnetProxy *self)
+void
+telnet_event_print_banner(TelnetProxy *self)
 {
-  ZPktBuf *pkt = z_pktbuf_new_from_gstring(self->greeting);
+  ZPktBuf *pkt = telnet_user_string_to_pktbuf(self->banner);
 
   if (telnet_send_data(self, EP_CLIENT, pkt) != G_IO_STATUS_NORMAL)
     telnet_change_state(self, TELNET_STATE_QUIT);
@@ -834,35 +831,6 @@ start_inband_server_selection(TelnetProxy *self)
   z_proxy_leave(self);
 }
 
-static void
-notify_userauth_failure(TelnetProxy *self)
-{
-  z_proxy_enter(self);
-
-  if (self->server_username->len > 0)
-    z_notify_proxy_event(&self->super, "telnet.userauth_failure", "username", self->server_username->str,
-                         "gateway_user", self->gw_username->str, NULL);
-  else
-    z_notify_proxy_event(&self->super, "telnet.userauth_failure", "gateway_user", self->gw_username->str,
-                         NULL);
-
-  z_proxy_leave(self);
-}
-
-static void
-notify_userauth_success(TelnetProxy *self)
-{
-  z_proxy_enter(self);
-
-  if (self->server_username->len > 0)
-    z_notify_proxy_event(&self->super, "telnet.userauth_success", "username", self->server_username->str,
-                         "gateway_user", self->gw_username->str, NULL);
-  else
-    z_notify_proxy_event(&self->super, "telnet.userauth_success", "gateway_user", self->gw_username->str,
-                         NULL);
-
-  z_proxy_leave(self);
-}
 
 static void
 gateway_authentication_failed(TelnetProxy *self)
@@ -879,11 +847,10 @@ gateway_authentication_failed(TelnetProxy *self)
       return;
     }
 
-  if (self->gw_password_is_from_env)
+  if (self->gateway_password_is_from_env)
     {
       /* no retry if the password came from the environment */
       z_proxy_log(self, TELNET_AUTH, 3, "Gateway authentication failed, will not retry non-interactive authentication;");
-      notify_userauth_failure(self);
       telnet_change_state(self, TELNET_STATE_QUIT);
     }
   else
@@ -892,7 +859,6 @@ gateway_authentication_failed(TelnetProxy *self)
       if (++self->gw_authentication_failures >= 3)
         {
           z_proxy_log(self, TELNET_AUTH, 3, "Gateway authentication failed, maximum number of failed attempts reached, exiting;");
-          notify_userauth_failure(self);
           telnet_change_state(self, TELNET_STATE_QUIT);
         }
       else
@@ -910,15 +876,14 @@ start_inband_authentication(TelnetProxy *self)
 {
   z_proxy_enter(self);
 
-  if (self->gw_username->len > 0)
+  if (self->gateway_user->len > 0)
     {
       /* we already have the user name, get password */
-      if (self->gw_password->len > 0)
+      if (self->gateway_password->len > 0)
         {
           /* have the password, too, check it */
           if (telnet_do_gateway_auth(self))
             {
-              notify_userauth_success(self);
               start_inband_server_selection(self);
             }
           else
@@ -938,7 +903,7 @@ start_non_transparent_session(TelnetProxy *self)
 {
   z_proxy_enter(self);
 
-  telnet_event_print_greeting(self);
+  telnet_event_print_banner(self);
 
   /* check if gateway auth is required */
   if (self->auth && self->gw_auth_required)
@@ -965,7 +930,7 @@ telnet_state_nt_prompt_server(TelnetProxy *self)
   if (self->line_editor.eol)
     {
       ZPktBuf *line = self->line_editor.data_buffer;
-      GString *server = g_string_new_len(z_pktbuf_data(line), z_pktbuf_length(line));
+      GString *server = g_string_new_len(static_cast<gchar *>(z_pktbuf_data(line)), z_pktbuf_length(line));
       telnet_lineedit_clear(&self->line_editor);
 
       if (telnet_policy_parse_authinfo(self, "SERVER", server))
@@ -983,7 +948,7 @@ telnet_state_nt_prompt_user(TelnetProxy *self)
   if (self->line_editor.eol)
     {
       ZPktBuf *line = self->line_editor.data_buffer;
-      g_string_assign_len(self->gw_username, z_pktbuf_data(line), z_pktbuf_length(line));
+      g_string_assign_len(self->gateway_user, static_cast<gchar *>(z_pktbuf_data(line)), z_pktbuf_length(line));
       telnet_lineedit_clear(&self->line_editor);
       start_inband_authentication(self);
     }
@@ -996,7 +961,7 @@ telnet_state_nt_prompt_password(TelnetProxy *self)
     {
       ZPktBuf *line = self->line_editor.data_buffer;
 
-      g_string_assign_len(self->gw_password, z_pktbuf_data(line), z_pktbuf_length(line));
+      g_string_assign_len(self->gateway_password, static_cast<gchar *>(z_pktbuf_data(line)), z_pktbuf_length(line));
       telnet_lineedit_clear(&self->line_editor);
 
       gboolean res = telnet_do_gateway_auth(self);

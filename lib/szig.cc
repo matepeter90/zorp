@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : SaSa
  * Auditor :
@@ -120,7 +119,7 @@
  *     structure requires that (e.g. GString)
  */
 
-#define Z_SZIG_MAX_LINE 4096
+static const int Z_SZIG_MAX_LINE = 131072 + 256; /* 128KiB is the max length of a single argument + a little room */
 #define Z_SZIG_STATS_INTERVAL 5000      /**< interval at which samples will be taken for the average aggregator */
 
 /**
@@ -407,8 +406,8 @@ z_szig_value_add_connection_prop(ZSzigValue *v, const gchar *name, const gchar *
  * property list in the newly created ZSzigValue instance. The list of
  * properties is passed as a va_list.
  **/
-ZSzigValue *
-z_szig_value_new_connection_props_va(const gchar *service, gint instance_id, gushort sec_conn_id, gushort related_id, const gchar *name, va_list l)
+static ZSzigValue *
+z_szig_value_new_connection_props_va(const gchar *service, gint instance_id, gint sec_conn_id, gushort related_id, const gchar *name, va_list l)
 {
   ZSzigValue *v = g_new0(ZSzigValue, 1);
 
@@ -439,7 +438,7 @@ z_szig_value_new_connection_props_va(const gchar *service, gint instance_id, gus
  * properties are passed as variable arguments.
  **/
 ZSzigValue *
-z_szig_value_new_connection_props(const gchar *service, gint instance_id, gushort sec_conn_id, gushort related_id, const gchar *name, ...)
+z_szig_value_new_connection_props(const gchar *service, gint instance_id, gint sec_conn_id, gushort related_id, const gchar *name, ...)
 {
   ZSzigValue *v;
   va_list l;
@@ -673,7 +672,7 @@ z_szig_node_lookup_child(ZSzigNode *root, const gchar *name, gint *ndx)
   while (l <= h)
     {
       m = (l + h) >> 1;
-      n = g_ptr_array_index(root->children, m);
+      n = static_cast<ZSzigNode *>(g_ptr_array_index(root->children, m));
       cmp = strcmp(n->name, name);
       if (cmp > 0)
         {
@@ -732,7 +731,7 @@ z_szig_node_remove_child(ZSzigNode *root, gint remove_point)
 
   z_enter();
   g_assert((guint) remove_point < root->children->len);
-  child = root->children->pdata[remove_point];
+  child = static_cast<ZSzigNode *>(root->children->pdata[remove_point]);
   memmove(&root->children->pdata[remove_point], &root->children->pdata[remove_point+1], (root->children->len - remove_point - 1) * sizeof(gpointer));
   g_ptr_array_set_size(root->children, root->children->len - 1);
   z_szig_node_free(child);
@@ -1240,14 +1239,14 @@ z_szig_agr_average_rate(ZSzigNode *target_node, ZSzigEvent ev G_GNUC_UNUSED, ZSz
   avg_state->last_value = current_value;
 
   /* while first value in the queue (peek) exists and is too old */
-  oldest = g_queue_peek_head(avg_state->values);
+  oldest = static_cast<ZSzigAvgStateValue *>(g_queue_peek_head(avg_state->values));
   while (oldest && z_szig_agr_average_is_older(oldest->value_time, *current_time, avg_state->interval))
     {
       /* subtract it from sum and pop it off the queue */
       avg_state->sum -= oldest->value;
       g_free(g_queue_pop_head(avg_state->values));
       /* get the next one */
-      oldest = g_queue_peek_head(avg_state->values);
+      oldest = static_cast<ZSzigAvgStateValue *>(g_queue_peek_head(avg_state->values));
     }
   /* if the queue is empty, set the sum to 0 (just to be sure) */
   if (g_queue_is_empty(avg_state->values))
@@ -1318,7 +1317,7 @@ z_szig_agr_per_zone_count_print_entry(gpointer z, gpointer v, gpointer s)
 {
   ZSzigAgrCountPrintState *state = (ZSzigAgrCountPrintState *)s;
   char *zone = (char *)z;
-  gulong *value = v;
+  gulong *value = static_cast<gulong *>(v);
 
   if (state->first)
     state->first = FALSE;
@@ -1348,7 +1347,7 @@ z_szig_update_zone_count(ZSzigNode *service, const char *node_name, const char *
   ZSzigNode *zones_node;
   GHashTable *hash;
   gulong *counter;
-  ZSzigAgrCountPrintState print_state = { .first = TRUE, .printout = g_string_sized_new(32) };
+  ZSzigAgrCountPrintState print_state = { g_string_sized_new(32), TRUE };
 
   /* find or create stat nodes */
   zones_node = z_szig_node_add_named_child(service, node_name);
@@ -1363,7 +1362,7 @@ z_szig_update_zone_count(ZSzigNode *service, const char *node_name, const char *
     }
 
   /* lookup or create entry in hash tables */
-  counter = g_hash_table_lookup(hash, zone_name);
+  counter = static_cast<gulong *>(g_hash_table_lookup(hash, zone_name));
   if (!counter)
     {
       counter = g_new0(gulong, 1);
@@ -1501,24 +1500,31 @@ void
 z_szig_agr_del_connection_props(ZSzigNode *target_node, ZSzigEvent ev G_GNUC_UNUSED, ZSzigValue *p, gpointer user_data G_GNUC_UNUSED)
 {
   ZSzigServiceProps *props;
-  ZSzigNode *service, *instance;
+  ZSzigNode *service, *instance, *secondary;
   gchar buf[16];
-  gint ndx;
+  gint instance_ndx, secondary_ndx;
 
   z_enter();
   g_return_if_fail(p->type == Z_SZIG_TYPE_CONNECTION_PROPS);
   props = &p->u.service_props;
   service = z_szig_node_lookup_child(target_node, props->name, NULL);
   g_snprintf(buf, sizeof(buf), "%d", props->instance_id);
-  instance = z_szig_node_lookup_child(service, buf, &ndx);
+  instance = z_szig_node_lookup_child(service, buf, &instance_ndx);
+  g_snprintf(buf, sizeof(buf), "%d", props->sec_conn_id);
+  secondary = z_szig_node_lookup_child(instance, buf, &secondary_ndx);
 
-  if (!instance)
+  if (!secondary)
     {
-      z_log(NULL, CORE_ERROR, 0, "Internal error, end-of-service notification referred to a non-existent service; service='%s:%d'", props->name, props->instance_id);
+      z_log(NULL, CORE_ERROR, 0, "Internal error, end-of-service notification referred to a non-existent service; service='%s:%d:%d'", props->name, props->instance_id, props->sec_conn_id);
       z_return();
     }
+
   G_LOCK(result_tree_structure_lock);
-  z_szig_node_remove_child(service, ndx);
+  z_szig_node_remove_child(instance, secondary_ndx);
+
+  if (!instance->children->len)
+    z_szig_node_remove_child(service, instance_ndx);
+
   G_UNLOCK(result_tree_structure_lock);
   z_return();
 }
@@ -1733,7 +1739,7 @@ z_szig_process_event(ZSzigEvent ev, ZSzigValue *param)
  * specified target node.
  **/
 static void
-z_szig_register_handler(ZSzigEvent ev, ZSzigEventHandler func, const gchar *node_name, gpointer user_data)
+z_szig_register_handler(ZSzigEvent ev, ZSzigEventHandler func, const gchar *node_name, gconstpointer user_data)
 {
   ZSzigEventCallback *cb;
   ZSzigEventDesc *d;
@@ -1742,7 +1748,7 @@ z_szig_register_handler(ZSzigEvent ev, ZSzigEventHandler func, const gchar *node
 
   cb = g_new0(ZSzigEventCallback, 1);
   cb->node = z_szig_tree_lookup(node_name, TRUE, NULL, NULL);
-  cb->user_data = user_data;
+  cb->user_data = const_cast<gpointer>(user_data);
   cb->func = func;
   d->callbacks = g_list_append(d->callbacks, cb);
 }
@@ -2050,21 +2056,26 @@ static gboolean
 z_szig_read_callback(ZStream *stream, GIOCondition cond G_GNUC_UNUSED, gpointer user_data)
 {
   ZSzigConnection *conn = (ZSzigConnection *) user_data;
-  gchar buf[Z_SZIG_MAX_LINE];
-  gsize buflen = sizeof(buf) - 1;
+  gchar *buf;
+  gsize buflen = Z_SZIG_MAX_LINE - 1;
   GIOStatus res;
   ZStream *tmp_stream;
 
   z_enter();
+  buf = static_cast<gchar *>(malloc(Z_SZIG_MAX_LINE));
   res = z_stream_line_get_copy(stream, buf, &buflen, NULL);
   if (res == G_IO_STATUS_NORMAL)
     {
       buf[buflen] = 0;
       if (z_szig_handle_command(conn, buf))
-        z_return(TRUE);
+        {
+          g_free(buf);
+          z_return(TRUE);
+        }
     }
   else if (res == G_IO_STATUS_AGAIN)
     {
+      g_free(buf);
       z_return(TRUE);
     }
 
@@ -2072,6 +2083,7 @@ z_szig_read_callback(ZStream *stream, GIOCondition cond G_GNUC_UNUSED, gpointer 
   tmp_stream = conn->stream;
   conn->stream = NULL;
   z_stream_unref(tmp_stream);
+  g_free(buf);
   z_return(FALSE);
 }
 

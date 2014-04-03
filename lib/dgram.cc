@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Stream like operations for datagram based protocols.
  *
@@ -38,11 +37,11 @@
 #include <zorp/tpsocket.h>
 #include <zorp/cap.h>
 
-enum
+enum ZorpDgramFlags
 {
   ZDS_LISTEN = 1,
   ZDS_ESTABLISHED = 2,
-} ZorpDgramFlags;
+};
 
 #ifndef IP_ORIGDSTADDR
 #define IP_ORIGDSTADDR 20
@@ -60,20 +59,18 @@ enum
 #define IPV6_RECVORIGDSTADDR IPV6_ORIGDSTADDR
 #endif
 
-typedef struct _ZDgramSocketFuncs
+struct ZDgramSocketFuncs
 {
   gint (*open)(guint flags, ZSockAddr *remote, ZSockAddr *local, guint32 sock_flags, gint tos, GError **error);
   gboolean (*setup)(gint fd, guint flags, gint tos, gint family);
   GIOStatus (*recv)(gint fd, ZPktBuf **pack, ZSockAddr **from, ZSockAddr **to, gint *tos, gboolean peek, GError **error);
-} ZDgramSocketFuncs;
+};
 
 /* Wrapper functions calling the underlying OS specific routines */
 
 static ZDgramSocketFuncs *dgram_socket_funcs;
 
 /**
- * z_dgram_socket_open:
- *
  * Generic dgram_socket_open, will use the enabled one of _l22_, _nf_ or _ipf_.
  */
 static gint
@@ -83,8 +80,6 @@ z_dgram_socket_open(guint flags, ZSockAddr *remote, ZSockAddr *local, guint32 so
 }
 
 /**
- * z_dgram_socket_setup:
- *
  * Generic dgram_socket_setup, will use the system dependent implementation _l22_ or _nf_.
  */
 static gboolean
@@ -94,8 +89,6 @@ z_dgram_socket_setup(gint fd, guint flags, gint tos, gint family)
 }
 
 /**
- * z_dgram_socket_recv:
- *
  * Generic dgram_socket_recv, will use the enabled one of _l22_, _nf_ or _ipf_.
  */
 GIOStatus
@@ -105,18 +98,17 @@ z_dgram_socket_recv(gint fd, ZPktBuf **pack, ZSockAddr **from, ZSockAddr **to, g
 }
 
 /**
- * z_nf_dgram_socket_open:
- * @flags: Additional flags: ZDS_LISTEN for incoming, ZDS_ESTABLISHED for outgoing socket
- * @remote: Address of the remote endpoint
- * @local: Address of the local endpoint
- * @sock_flags: Flags for binding, see 'z_bind' for details
- * @error: not used
- *
  * Create a new UDP socket - netfilter tproxy version
+ *
+ * @param flags Additional flags: ZDS_LISTEN for incoming, ZDS_ESTABLISHED for outgoing socket
+ * @param remote Address of the remote endpoint
+ * @param local Address of the local endpoint
+ * @param sock_flags Flags for binding, see 'z_bind' for details
+ * @param error not used
+ *
  * FIXME: some words about the difference
  *
- * Returns:
- * -1 on error, socket descriptor otherwise
+ * @return -1 on error, socket descriptor otherwise
  */
 gint
 z_nf_dgram_socket_open(guint flags, ZSockAddr *remote, ZSockAddr *local, guint32 sock_flags, gint tos, GError **error G_GNUC_UNUSED)
@@ -188,12 +180,12 @@ z_nf_dgram_socket_open(guint flags, ZSockAddr *remote, ZSockAddr *local, guint32
 }
 
 /**
- * z_nf_dgram_socket_setup:
- * @fd: Socket descriptor to set up
- * @flags: Flags for binding, see 'z_bind' for details
+ * Set up Linux-specific socket options on a datagram socket.
  *
- * Returns:
- * FALSE if the setup operation failed, TRUE otherwise
+ * @param fd Socket descriptor to set up
+ * @param flags Flags for binding, see 'z_bind' for details
+ *
+ * @return FALSE if the setup operation failed, TRUE otherwise
  */
 gboolean
 z_nf_dgram_socket_setup(gint fd, guint flags, gint tos, gint family)
@@ -268,20 +260,19 @@ z_nf_dgram_socket_setup(gint fd, guint flags, gint tos, gint family)
 }
 
 /**
- * z_nf_dgram_socket_recv:
- * @fd: Socket descriptor to read from
- * @packet: The received packet
- * @from_addr: Address of the remote endpoint
- * @to_addr: Address of the local endpoint
- * @error: not used
- *
  * Receive data from an UDP socket and encapsulate it in a ZPktBuf.
+ *
+ * @param fd Socket descriptor to read from
+ * @param packet The received packet
+ * @param from_addr Address of the remote endpoint
+ * @param to_addr Address of the local endpoint
+ * @param error not used
+ *
  * Provides address information about the source and destination of
  * the packet. - netfilter tproxy version.
  * FIXME: some words about the difference
  *
- * Returns:
- * The status of the operation
+ * @return The status of the operation
  */
 GIOStatus
 z_nf_dgram_socket_recv(gint fd, ZPktBuf **packet, ZSockAddr **from_addr, ZSockAddr **to_addr, gint *tos, gboolean peek, GError **error G_GNUC_UNUSED)
@@ -386,14 +377,14 @@ ZDgramSocketFuncs z_nf_dgram_socket_funcs =
 };
 
 /**
- * z_dgram_init:
- * @sysdep_tproxy: Required functionality to use: Z_SD_TPROXY_[LINUX22|NETFILTER_V12|NETFILTER_V20]
+ * Initialize datagram module.
  *
- * Module initialisation, initialises the function table according to the
- * requested transparency method.
+ * @param sysdep_tproxy Required functionality to use: Z_SD_TPROXY_[LINUX22|NETFILTER_V12|NETFILTER_V20]
  *
- * Returns:
- * TRUE on success
+ * Initialises the function table according to the requested
+ * transparency method.
+ *
+ * @return TRUE on success
  */
 gboolean
 z_dgram_init(void)
@@ -407,14 +398,12 @@ z_dgram_init(void)
 
 /* Datagram listener */
 
-typedef struct _ZDGramListener
+struct ZDGramListener
 {
   ZListener super;
   gint rcvbuf;
   gint session_limit;
-} ZDGramListener;
-
-ZClass ZDGramListener__class;
+};
 
 static gint
 z_dgram_listener_open_listener(ZListener *s)
@@ -629,9 +618,9 @@ static ZConnectorFuncs z_dgram_connector_funcs =
 
 ZClass ZDGramConnector__class =
 {
-  Z_CLASS_HEADER,
-  .super_class = Z_CLASS(ZConnector),
-  .name = "ZDGramConnector",
-  .size = sizeof(ZConnector),
-  .funcs = &z_dgram_connector_funcs.super
+  Z_CLASS_HEADER,  /* super, funcs_resolved */
+  Z_CLASS(ZConnector), /* super_class */
+  "ZDGramConnector", /* name */
+  sizeof(ZConnector), /* size */
+  &z_dgram_connector_funcs.super /* funcs */
 };

@@ -1,15 +1,17 @@
+#define BOOST_TEST_MAIN
+#include <boost/test/unit_test.hpp>
+
 #include "../http.h"
 
-#define BOOL_STR(x) ((x) ? "TRUE" : "FALSE")
-
-gboolean
-test_case(gint id, gchar *url_str, gboolean unicode, gboolean invalid_escape, gboolean format_absolute, gboolean canonicalize, gchar *expected_url_str)
+void
+test_case(gint id, const gchar *parse_url_str, gboolean unicode, gboolean invalid_escape, gboolean format_absolute, gboolean canonicalize, const gchar *expected_url_str)
 {
   HttpURL url;
   gchar *fail_reason = NULL;
   const gchar *error_reason = NULL;
   gboolean ok = TRUE, valid;
   GString *formatted_url = g_string_sized_new(0);
+  gchar * url_str = g_strdup(parse_url_str);
 
   http_init_url(&url);
   valid = http_parse_url(&url, unicode, invalid_escape, FALSE, url_str, &error_reason);
@@ -31,27 +33,17 @@ test_case(gint id, gchar *url_str, gboolean unicode, gboolean invalid_escape, gb
 
   g_string_free(formatted_url, TRUE);
 
-  if (ok)
-    {
-      printf("test success, id=%d, url=%s\n", id, url_str);
-      return TRUE;
-    }
-  else
-    {
-      printf("test failure, id=%d, url=%s, reason=%s\n", id, url_str, fail_reason);
-      g_free(fail_reason);
-      return FALSE;
-    }
+  BOOST_CHECK_MESSAGE(ok, "test failure, id=" << id << ", url=" << url_str << ", reason=" << fail_reason);
 }
 
 struct
 {
-  gchar *url_str;
+  const gchar *url_str;
   gboolean invalid_escape;
   gboolean unicode;
   gboolean format_absolute;
   gboolean canonicalize;
-  gchar *expected_url_str;
+  const gchar *expected_url_str;
 } test_table[] =
 
 {
@@ -97,38 +89,13 @@ struct
   { NULL, 0,0,0,0, NULL }
 };
 
-int
-main(int argc, char *argv[])
+BOOST_AUTO_TEST_CASE(test_canon_url)
 {
-  gint i, testcase_id = -1;
-  gint fail_count = 0, success_count = 0;
+  gint i;
 
-  if (argc == 2)
-    testcase_id = atoi(argv[1]);
-
-  if (testcase_id == -1)
+  for (i = 0; test_table[i].url_str; i++)
     {
-      for (i = 0; test_table[i].url_str; i++)
-        {
-          if (test_case(i, test_table[i].url_str, test_table[i].unicode, test_table[i].invalid_escape, test_table[i].format_absolute, test_table[i].canonicalize,
-                        test_table[i].expected_url_str))
-            {
-              success_count++;
-            }
-          else
-            {
-              fail_count++;
-            }
-        }
-
-      printf("Report: %d success, %d failed\n", success_count, fail_count);
+      test_case(i, test_table[i].url_str, test_table[i].unicode, test_table[i].invalid_escape, test_table[i].format_absolute, test_table[i].canonicalize,
+                    test_table[i].expected_url_str);
     }
-  else
-    {
-      i = testcase_id;
-      test_case(i, test_table[i].url_str, test_table[i].unicode, test_table[i].invalid_escape, test_table[i].format_absolute, test_table[i].canonicalize, test_table[i].expected_url_str);
-    }
-
-  return !(fail_count == 0);
-
 }

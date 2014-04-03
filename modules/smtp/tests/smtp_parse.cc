@@ -1,9 +1,10 @@
-#undef ENABLE_TRACE
-#include "../smtpcmd.c"
-#include <glib.h>
+#define BOOST_TEST_MAIN
+#include <boost/test/unit_test.hpp>
 
-static void
-test_smtp_parse_atom(void)
+#undef ENABLE_TRACE
+#include "../smtpcmd.cc"
+
+BOOST_AUTO_TEST_CASE(test_smtp_parse_atom)
 {
   gchar *end, *str;
 
@@ -11,22 +12,22 @@ test_smtp_parse_atom(void)
 
   /* empty string is OK */
   str = "";
-  g_assert(smtp_parse_atom(NULL, str, &end));
-  g_assert(end == str);
+  BOOST_CHECK(smtp_parse_atom(NULL, str, &end));
+  BOOST_CHECK(end == str);
 
   /* should stop at end of string */
   str = "valid";
-  g_assert(smtp_parse_atom(NULL, str, &end));
-  g_assert(end == OFFSET_TO_PTR(str, strlen(str)));
+  BOOST_CHECK(smtp_parse_atom(NULL, str, &end));
+  BOOST_CHECK(end == OFFSET_TO_PTR(str, strlen(str)));
 
   /* special characters */
 #define TEST_SPECIAL(chr) do {                  \
     str = chr;					\
-    g_assert(smtp_parse_atom(NULL, str, &end));	\
-    g_assert(end == str);			\
+    BOOST_CHECK(smtp_parse_atom(NULL, str, &end));	\
+    BOOST_CHECK(end == str);			\
     str = "valid" chr "alsovalid";              \
-    g_assert(smtp_parse_atom(NULL, str, &end)); \
-    g_assert_cmpint(end - str, ==, strstr(str, chr) - str);     \
+    BOOST_CHECK(smtp_parse_atom(NULL, str, &end)); \
+    BOOST_CHECK_EQUAL(end - str, strstr(str, chr) - str);     \
   } while (0)
 
   TEST_SPECIAL("(");
@@ -47,37 +48,23 @@ test_smtp_parse_atom(void)
 #undef TEST_SPECIAL
 }
 
-static void
-test_smtp_parse_domain(void)
+BOOST_AUTO_TEST_CASE(test_smtp_parse_domain)
 {
   gchar *end;
 
 #define TEST_DOMAIN(str, expected) do {                  \
     gchar *_end;                                         \
-    g_assert(smtp_parse_domain(NULL, str, &_end));       \
-    g_assert_cmpint(_end - str, ==, strlen(expected));   \
+    BOOST_CHECK(smtp_parse_domain(NULL, str, &_end));       \
+    BOOST_CHECK_EQUAL(_end - str, strlen(expected));   \
   } while (0)
 
   /* must contain at least one valid character */
-  g_assert(smtp_parse_domain(NULL, "", &end) == FALSE);
-  g_assert(smtp_parse_domain(NULL, " invalid.example.com", &end) == FALSE);
+  BOOST_CHECK(!smtp_parse_domain(NULL, "", &end));
+  BOOST_CHECK(!smtp_parse_domain(NULL, " invalid.example.com", &end));
   TEST_DOMAIN("a", "a");
   TEST_DOMAIN("a ", "a");
 
   /* parts may be separated by dots */
   TEST_DOMAIN("domain.name.example", "domain.name.example");
   TEST_DOMAIN("domain .name.example", "domain");
-}
-
-int
-main(int argc, char *argv[])
-{
-  g_test_init(&argc, &argv, NULL);
-
-  g_test_add_func("/smtp/parse/atom", test_smtp_parse_atom);
-  g_test_add_func("/smtp/parse/domain", test_smtp_parse_domain);
-
-  g_test_run();
-
-  return 0;
 }

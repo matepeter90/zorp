@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  * Author  : Mincer
  *
@@ -96,7 +95,7 @@ z_proxy_ssl_host_iface_check_name_method(ZProxyHostIface *s,
       GENERAL_NAME *gen_name;
 
       ext = X509_get_ext(self->server_cert, ext_ndx);
-      alt_names = X509V3_EXT_d2i(ext);
+      alt_names = (STACK_OF(GENERAL_NAME) *)X509V3_EXT_d2i(ext);
       if (alt_names)
         {
           gint num, i;
@@ -189,7 +188,7 @@ ZProxyHostIfaceFuncs z_proxy_ssl_host_iface_funcs =
     Z_FUNCS_COUNT(ZProxyHostIface),
     z_proxy_ssl_host_iface_free_method,
   },
-  .check_name = z_proxy_ssl_host_iface_check_name_method,
+  z_proxy_ssl_host_iface_check_name_method,
 };
 
 Z_CLASS_DEF(ZProxySslHostIface, ZProxyHostIface, z_proxy_ssl_host_iface_funcs);

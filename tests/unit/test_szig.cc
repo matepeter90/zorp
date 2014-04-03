@@ -1,3 +1,6 @@
+#define BOOST_TEST_MAIN
+#include <boost/test/unit_test.hpp>
+
 #include <zorp/zorp.h>
 #include <zorp/thread.h>
 #include <zorp/szig.h>
@@ -225,11 +228,9 @@ check_thread_rates(glong avg1, glong avg5, glong avg15)
   return failed;
 }
 
-int
-main(void)
+BOOST_AUTO_TEST_CASE(test_szig)
 {
-  if (init_szig())
-    return 1;
+  BOOST_CHECK(!init_szig());
 
   /* szig thread count has a skew of 2 that offsets the threads started by Zorp core
    * before SZIG initialization: this makes testing thread counters and averages
@@ -246,26 +247,22 @@ main(void)
   fprintf(stdout, "fast-forwarding one minute\n");
   forward_time(TICKS_PER_1_MIN);
   sleep(1);
-  if (check_connection_rates(NUM_CONNS / S_1_MIN, NUM_CONNS / S_5_MIN, NUM_CONNS / S_15_MIN))
-    return 1;
+  BOOST_CHECK(!check_connection_rates(NUM_CONNS / S_1_MIN, NUM_CONNS / S_5_MIN, NUM_CONNS / S_15_MIN));
 
   fprintf(stdout, "fast-forwarding four minutes\n");
   forward_time(TICKS_PER_5_MIN - TICKS_PER_1_MIN);
   sleep(1);
-  if (check_connection_rates(0, NUM_CONNS / S_5_MIN, NUM_CONNS / S_15_MIN))
-    return 1;
+  BOOST_CHECK(!check_connection_rates(0, NUM_CONNS / S_5_MIN, NUM_CONNS / S_15_MIN));
 
   fprintf(stdout, "fast-forwarding ten minutes\n");
   forward_time(TICKS_PER_15_MIN - TICKS_PER_5_MIN);
   sleep(1);
-  if (check_connection_rates(0, 0, NUM_CONNS / S_15_MIN))
-    return 1;
+  BOOST_CHECK(!check_connection_rates(0, 0, NUM_CONNS / S_15_MIN));
 
   fprintf(stdout, "fast-forwarding one minute\n");
   forward_time(TICKS_PER_1_MIN);
   sleep(1);
-  if (check_connection_rates(0, 0, 0))
-    return 1;
+  BOOST_CHECK(!check_connection_rates(0, 0, 0));
 
   fprintf(stdout, "checking thread rate statistics\n");
   /* start and stop NUM_THREADS threads */
@@ -275,12 +272,8 @@ main(void)
   fprintf(stdout, "fast-forwarding one minute\n");
   forward_time(TICKS_PER_1_MIN);
   sleep(1);
-  if (check_thread_rates(NUM_THREADS / S_1_MIN, NUM_THREADS / S_5_MIN, NUM_THREADS / S_15_MIN))
-    return 1;
+  BOOST_CHECK(!check_thread_rates(NUM_THREADS / S_1_MIN, NUM_THREADS / S_5_MIN, NUM_THREADS / S_15_MIN));
 
   fprintf(stdout, "checking thread counters\n");
-  if (check_thread_counters())
-    return 1;
-
-  return 0;
+  BOOST_CHECK(!check_thread_counters());
 }

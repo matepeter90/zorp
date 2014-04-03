@@ -1,11 +1,10 @@
 /***************************************************************************
  *
- * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
- * 2010, 2011 BalaBit IT Ltd, Budapest, Hungary
+ * Copyright (c) 2000-2014 BalaBit IT Ltd, Budapest, Hungary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation.
  *
  * Note that this permission is granted for only version 2 of the GPL.
  *
@@ -20,7 +19,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  ***************************************************************************/
 
@@ -31,7 +30,6 @@
 #include "telnetstate.h"
 #include "telnettls.h"
 #include "telnetoption.h"
-#include "telnetpatternmatch.h"
 
 #include <zorp/thread.h>
 #include <zorp/registry.h>
@@ -41,7 +39,6 @@
 #include <zorp/stream.h>
 #include <zorp/streambuf.h>
 #include <zorp/pystruct.h>
-#include <zorp/pyaudit.h>
 #include <zorp/poll.h>
 #include <zorp/packetbuf.h>
 #include <zorp/source.h>
@@ -95,14 +92,14 @@ telnet_set_defaults(TelnetProxy *self)
   self->gw_auth_required = FALSE;
   self->server_stream_initialized = FALSE;
   self->server_hostname = g_string_new("");
-  self->server_username = g_string_new("");
-  self->gw_username = g_string_new("");
-  self->gw_password = g_string_new("");
+  self->username = g_string_new("");
+  self->gateway_user = g_string_new("");
+  self->gateway_password = g_string_new("");
   self->server_port = 23;
-  self->greeting = g_string_new("Welcome to Zorp!\r\n\r\n");
+  self->banner = g_string_new("");
   self->server_name_prompt = g_string_new("Server: ");
-  self->gw_username_prompt = g_string_new("Gateway user name: ");
-  self->gw_password_prompt = g_string_new("Gateway password: ");
+  self->gateway_user_prompt = g_string_new("Gateway user name: ");
+  self->gateway_password_prompt = g_string_new("Gateway password: ");
   self->negotiation = g_hash_table_new(g_str_hash, g_str_equal);
   z_proxy_return(self);
 }
@@ -121,6 +118,10 @@ telnet_register_vars(TelnetProxy *self)
   z_proxy_var_new(&self->super, "auth",
                   Z_VAR_TYPE_OBJECT | Z_VAR_GET | Z_VAR_SET_CONFIG,
                   &self->auth);
+
+  z_proxy_var_new(&self->super, "auth_server",
+                  Z_VAR_GET | Z_VAR_SET | Z_VAR_GET_CONFIG | Z_VAR_SET_CONFIG | Z_VAR_TYPE_INT,
+                  &self->auth_server);
 
   z_proxy_var_new(&self->super, "option",
                   Z_VAR_TYPE_DIMHASH | Z_VAR_GET | Z_VAR_GET_CONFIG,
@@ -162,25 +163,25 @@ telnet_register_vars(TelnetProxy *self)
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET_CONFIG,
                   self->server_name_prompt);
 
-  z_proxy_var_new(&self->super, "gw_username_prompt",
+  z_proxy_var_new(&self->super, "gateway_user_prompt",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET_CONFIG,
-                  self->gw_username_prompt);
+                  self->gateway_user_prompt);
 
-  z_proxy_var_new(&self->super, "gw_password_prompt",
+  z_proxy_var_new(&self->super, "gateway_password_prompt",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET_CONFIG,
-                  self->gw_password_prompt);
+                  self->gateway_password_prompt);
 
-  z_proxy_var_new(&self->super, "greeting",
+  z_proxy_var_new(&self->super, "banner",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET_CONFIG,
-                  self->greeting);
+                  self->banner);
 
-  z_proxy_var_new(&self->super, "server_username",
+  z_proxy_var_new(&self->super, "username",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET,
-                  self->server_username);
+                  self->username);
 
-  z_proxy_var_new(&self->super, "gw_username",
+  z_proxy_var_new(&self->super, "gateway_user",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET,
-                  self->gw_username);
+                  self->gateway_user);
 
   z_proxy_var_new(&self->super, "server_hostname",
                   Z_VAR_TYPE_STRING | Z_VAR_GET | Z_VAR_SET,
@@ -242,16 +243,13 @@ telnet_write_packet(TelnetProxy *self, ZEndpoint ep, ZPktBuf *pkt)
 
   if (self->super.ssl_opts.handshake_pending[ep]) /* do not send any data while SSL handshake is in progress. */
     {
+      z_pktbuf_unref(pkt);
       z_proxy_return(self, G_IO_STATUS_NORMAL);
     }
 
-  /* need to keep pkt around to be able to write the audit record */
-  z_pktbuf_ref(pkt);
-
-  res = z_stream_write_packet(self->super.endpoints[ep], pkt, NULL);
-
-
-  z_pktbuf_unref(pkt);
+    {
+      res = z_stream_write_packet(self->super.endpoints[ep], pkt, NULL);
+    }
 
   z_proxy_return(self, res);
 }
@@ -264,7 +262,7 @@ telnet_send_suboption(TelnetProxy *self, ZEndpoint ep, ZPktBuf *suboption)
   z_pktbuf_put_u8(out, TELNET_IAC);
   z_pktbuf_put_u8(out, TELNET_CMD_SB);
   telnet_protocol_escape_data(suboption);
-  z_pktbuf_put_u8s(out, z_pktbuf_length(suboption), z_pktbuf_data(suboption));
+  z_pktbuf_put_u8s(out, z_pktbuf_length(suboption), static_cast<guint8 *>(z_pktbuf_data(suboption)));
   z_pktbuf_put_u8(out, TELNET_IAC);
   z_pktbuf_put_u8(out, TELNET_CMD_SE);
 
@@ -330,6 +328,7 @@ telnet_read(TelnetProxy *self, ZStream *stream, ZEndpoint ep)
   if (status == G_IO_STATUS_ERROR || status == G_IO_STATUS_EOF)
     {
       /* error already logged */
+      z_pktbuf_unref(buf);
       z_poll_quit(self->poll);
       return FALSE;
     }
@@ -682,6 +681,8 @@ telnet_main(ZProxy *s)
               z_proxy_log(self, TELNET_ERROR, 3, "TLS negotiation error;");
               telnet_change_state(self, TELNET_STATE_QUIT);
             }
+
+          telnet_event_print_banner(self);
         }
     }
   else
@@ -755,11 +756,12 @@ telnet_proxy_free(ZObject *s)
 
   z_enter();
 
+
   telnet_lineedit_destroy(&self->line_editor);
   telnet_protocol_destroy(&self->protocol[EP_CLIENT]);
   telnet_protocol_destroy(&self->protocol[EP_SERVER]);
 
-  g_string_free(self->gw_password, TRUE);
+  g_string_free(self->gateway_password, TRUE);
 
   z_poll_unref(self->poll);
   self->poll = NULL;
@@ -796,15 +798,22 @@ ZProxyFuncs telnet_proxy_funcs =
       Z_FUNCS_COUNT(ZProxy),
       telnet_proxy_free,
     },
-    .config = telnet_config,
-    .main = telnet_main,
+    /* .config = */ telnet_config,
+    /* .startup = */ NULL,
+    /* .main = */ telnet_main,
+    /* .shutdown = */ NULL,
+    /* .destroy = */ NULL,
+    /* .nonblocking_init = */ NULL,
+    /* .nonblocking_deinit = */ NULL,
+    /* .wakeup = */ NULL,
   };
 
 Z_CLASS_DEF(TelnetProxy, ZProxy, telnet_proxy_funcs);
 
 static ZProxyModuleFuncs telnet_module_funcs =
   {
-    .create_proxy = telnet_proxy_new,
+    /* .create_proxy = */ telnet_proxy_new,
+    /* .module_py_init = */ NULL
   };
 
 /**

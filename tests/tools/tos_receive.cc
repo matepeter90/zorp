@@ -6,7 +6,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 
-#define PORT (unsigned short)12345
+#define PORT ((uint16_t) 12345)
 
 int
 make_socket (uint16_t port)
@@ -85,7 +85,7 @@ print_tos(int sock)
 int
 main(void)
 {
-  int sock, new;
+  int sock, new_;
   int flag;
   struct sockaddr_in clientname;
   unsigned char buf[256];
@@ -105,11 +105,11 @@ main(void)
       exit(EXIT_FAILURE);
     }
 
-  fprintf(stderr, "Listening on port %d\n", PORT);
+  fprintf(stderr, "Listening on port %hu\n", PORT);
 
   size = sizeof(clientname);
-  new = accept(sock, (struct sockaddr *) &clientname, &size);
-  if (new < 0)
+  new_ = accept(sock, (struct sockaddr *) &clientname, &size);
+  if (new_ < 0)
     {
       perror("accept");
       exit(EXIT_FAILURE);
@@ -119,17 +119,17 @@ main(void)
 	  inet_ntoa(clientname.sin_addr),
 	  ntohs(clientname.sin_port));
 
-  print_tos(new);
+  print_tos(new_);
 
-  if (read(new, buf, 1) < 0)
+  if (read(new_, buf, 1) < 0)
     {
       perror("read");
       exit(EXIT_FAILURE);
     }
 
-  print_tos(new);
+  print_tos(new_);
 
-  close(new);
+  close(new_);
   close(sock);
 
   exit(EXIT_SUCCESS);

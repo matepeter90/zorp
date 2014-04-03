@@ -1,11 +1,8 @@
 /* lib/zorp/zorpconfig.h.  Generated from zorpconfig.h.in by configure.  */
-/* lib/zorp/zorpconfig.h.in.  Generated from configure.in by autoheader.  */
-
-/* ADP Alerting framework is found */
-/* #undef ALERTING_ENABLED */
+/* lib/zorp/zorpconfig.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Zorp brochure version */
-#define BROCHURE_VERSION "3 F5"
+#define BROCHURE_VERSION "5"
 
 /* Enable debugging */
 #define ENABLE_DEBUG 0
@@ -22,14 +19,14 @@
 /* Enable trace messages */
 #define ENABLE_TRACE 0
 
+/* define if the compiler supports basic C++11 syntax */
+#define HAVE_CXX11 1
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
 
 /* Define to 1 if you have the `gethostbyname_r' function. */
 #define HAVE_GETHOSTBYNAME_R 1
-
-/* Define to 1 if you have the <google/coredumper.h> header file. */
-/* #undef HAVE_GOOGLE_COREDUMPER_H */
 
 /* Define to 1 if you have the `inet_aton' function. */
 #define HAVE_INET_ATON 1
@@ -51,9 +48,6 @@
 
 /* Zorp may enable core_dumping Linux 2.4- */
 #define HAVE_PR_SET_DUMPABLE 1
-
-/* Define to 1 if you have the <Python.h> header file. */
-#define HAVE_PYTHON_H 1
 
 /* Define to 1 if you have the `select' function. */
 #define HAVE_SELECT 1
@@ -132,34 +126,34 @@
 #define STDC_HEADERS 1
 
 /* Zorp package version */
-#define VERSION "3.9.8"
+#define VERSION "5.0.0"
 
 /* Configuration date */
-#define ZORP_CONFIG_DATE "2014/03/18"
+#define ZORP_CONFIG_DATE "2014/05/27"
 
 /* datadir */
-#define ZORP_DATADIR "/home/coroner/zwa/install/zorp-gpl-5.0/share/zorp"
+#define ZORP_DATADIR "/home/coroner/src/zorp/share/zorp"
 
 /* libdir */
-#define ZORP_LIBDIR "/home/coroner/zwa/install/zorp-gpl-5.0/lib/zorp"
+#define ZORP_LIBDIR "/home/coroner/src/zorp/lib/zorp"
 
 /* Required license version */
-#define ZORP_LICENSE_VERSION "3.4"
+#define ZORP_LICENSE_VERSION "5.0"
 
 /* pidfiledir */
-#define ZORP_PIDFILEDIR "/home/coroner/zwa/install/zorp-gpl-5.0/var/run/zorp/"
+#define ZORP_PIDFILEDIR "/home/coroner/src/zorp/var/run/zorp/"
 
 /* Required product name in license */
 #define ZORP_PRODUCT_NAME "Zorp Professional"
 
 /* Zorp source revision number */
-#define ZORP_SOURCE_REVISION "ssh+git://coroner@git.balabit/var/scm/git/zorp/zorp-core--mainline--5.0#master#7cd371f4542f06833d131dedc64a9b5f0cc09dbf"
+#define ZORP_SOURCE_REVISION "ssh+git://coroner@git.balabit/var/scm/git/zorp/zorp-core--mainline--5.0#f/B-09091-gpl-fixes#6d10e6871d0420cb863e42d9f2399373b024294a"
 
 /* localstatedir */
-#define ZORP_STATEDIR "/home/coroner/zwa/install/zorp-gpl-5.0/var"
+#define ZORP_STATEDIR "/home/coroner/src/zorp/var"
 
 /* sysconfdir */
-#define ZORP_SYSCONFDIR "/home/coroner/zwa/install/zorp-gpl-5.0/etc/zorp"
+#define ZORP_SYSCONFDIR "/home/coroner/src/zorp/etc/zorp"
 
 /* Enable large inode numbers on Mac OS X 10.5.  */
 #ifndef _DARWIN_USE_64_BIT_INODE

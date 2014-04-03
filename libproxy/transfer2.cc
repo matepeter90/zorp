@@ -91,13 +91,13 @@ z_transfer2_ps_iface_get_content_hint(ZProxyStackIface *s, gint64 *content_lengt
   /* Note: Save it with a mutex because it's only be set in z_transfer2_setup in
    * other thread than this called.
    */
-  g_mutex_lock(self->transfer->startup_lock);
+  g_mutex_lock(&self->transfer->startup_lock);
   *content_format = self->transfer->content_format;
   if (self->transfer->our_content_length_hint_set)
     *content_length = self->transfer->our_content_length_hint;
   else
     *content_length = -1;
-  g_mutex_unlock(self->transfer->startup_lock);
+  g_mutex_unlock(&self->transfer->startup_lock);
 
   return TRUE;
 }
@@ -122,11 +122,11 @@ ZProxyStackIfaceFuncs z_transfer2_ps_iface_funcs =
 {
   {
     Z_FUNCS_COUNT(ZProxyStackIface),
-    .free_fn = z_transfer2_ps_iface_free,
-  },
-  .set_verdict = z_transfer2_ps_iface_set_stacked_verdict,
-  .set_content_hint = z_transfer2_ps_iface_set_content_hint,
-  .get_content_hint = z_transfer2_ps_iface_get_content_hint
+    z_transfer2_ps_iface_free,
+  },                                        /* super */
+  z_transfer2_ps_iface_set_stacked_verdict, /* set_verdict */
+  z_transfer2_ps_iface_get_content_hint,    /* get_content_hint */
+  z_transfer2_ps_iface_set_content_hint,    /* set_content_hint */
 };
 
 Z_CLASS_DEF(ZTransfer2PSIface, ZProxyStackIface, z_transfer2_ps_iface_funcs);
@@ -171,7 +171,7 @@ z_transfer2_buffer_full(ZTransfer2Buffer *self)
 static inline void
 z_transfer2_buffer_init(ZTransfer2Buffer *self, gsize buffer_size)
 {
-  self->buf = g_malloc(buffer_size);
+  self->buf = static_cast<gchar *>(g_malloc(buffer_size));
   self->size = buffer_size;
 }
 
@@ -681,10 +681,10 @@ z_transfer2_start(ZTransfer2 *self)
   z_proxy_add_iface(self->owner, iface);
   z_object_unref(&iface->super);
 
-  g_mutex_lock(self->startup_lock);
+  g_mutex_lock(&self->startup_lock);
   if (!z_transfer2_stack_proxy(self, &self->stacked))
     {
-      g_mutex_unlock(self->startup_lock);
+      g_mutex_unlock(&self->startup_lock);
       z_proxy_log(self->owner, CORE_ERROR, 3, "Could not start stacked proxy, rejecting transfer;");
       z_proxy_leave(self->owner);
       return FALSE;
@@ -769,7 +769,7 @@ z_transfer2_start(ZTransfer2 *self)
   res = z_transfer2_setup(self);
 
   z_transfer2_switch_to_proxy_context(self);
-  g_mutex_unlock(self->startup_lock);
+  g_mutex_unlock(&self->startup_lock);
 
   if (self->timeout > 0)
     {
@@ -941,7 +941,7 @@ z_transfer2_simple_run(ZTransfer2 *self)
 
 /**
  * z_transfer2_new:
- * @class: class to instantiate
+ * @class_: class to instantiate
  * @owner: owner proxy instance
  * @poll: ZPoll instance
  * @source: source stream
@@ -953,7 +953,7 @@ z_transfer2_simple_run(ZTransfer2 *self)
  * This constructor creates a new ZTransfer2 instance with the specified parameters.
  **/
 ZTransfer2 *
-z_transfer2_new(ZClass *class,
+z_transfer2_new(ZClass *class_,
                 ZProxy *owner, ZPoll *poll,
                 ZStream *source, ZStream *dest,
                 gsize buffer_size,
@@ -964,7 +964,7 @@ z_transfer2_new(ZClass *class,
 
   z_proxy_enter(owner);
 
-  self = Z_NEW_COMPAT(class, ZTransfer2);
+  self = Z_NEW_COMPAT(class_, ZTransfer2);
   z_proxy_ref(owner);
   self->owner = owner;
   z_poll_ref(poll);
@@ -976,7 +976,7 @@ z_transfer2_new(ZClass *class,
   self->flags = flags;
   self->content_format = "file";
 
-  self->startup_lock = g_mutex_new();
+  g_mutex_init(&self->startup_lock);
 
   self->stack_info = g_string_sized_new(32);
   self->stack_decision = ZV_ACCEPT;
@@ -1044,8 +1044,7 @@ z_transfer2_free_method(ZObject *s)
   z_poll_unref(self->poll);
   g_string_free(self->stack_info, TRUE);
 
-  if (self->startup_lock)
-    g_mutex_free(self->startup_lock);
+  g_mutex_clear(&self->startup_lock);
 
   z_object_free_method(s);
   z_return();
@@ -1063,8 +1062,8 @@ ZTransfer2Funcs z_transfer2_funcs =
   NULL,
   NULL,
   NULL,
-  .run = z_transfer2_run_method,
-  .progress = NULL
+  z_transfer2_run_method,
+  NULL
 };
 
 Z_CLASS_DEF(ZTransfer2, ZObject, z_transfer2_funcs);
