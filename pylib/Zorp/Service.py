@@ -697,15 +697,6 @@ Rule(src_zone='office',
         session.name = self.name
         session.setServiceInstance(instance_id)
 
-        if self.session_counting:
-            session_status = registerSession()
-
-            if session_status == Z_SESSION_LIMIT_GRACEFULLY_REACHED:
-                log(session.session_id, CORE_SESSION, 2, "Session limit of the license reached, permitted to exceed it by 10 percents to a maximum of {0} connections.".format(getLicenseValue("Limit")))
-            elif session_status != Z_SESSION_LIMIT_NOT_REACHED:
-                log(session.session_id, CORE_SESSION, 2, "Session limit of the license exceeded by 10 percents, rejecting additional connection request.")
-                raise LimitException, "Session limit exceeded"
-
         self.lock.acquire()
         self.num_instances = self.num_instances + 1
         self.lock.release()
@@ -785,8 +776,6 @@ Rule(src_zone='office',
         </method>
         """
 
-        if self.session_counting:
-            unregisterSession()
         if session.started:
             self.lock.acquire()
             self.num_instances = self.num_instances - 1
